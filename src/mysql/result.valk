@@ -7,7 +7,7 @@ class Result {
 
     fn fetch_row(values: Array[String]) !none !error {
         values.clear()
-        let row : ?*[ptr] = null
+        let row : ?MySQLRow = null
         while true {
             let res = mysql_fetch_row_nonblocking(this.r, @stableRef(row))
             match res {

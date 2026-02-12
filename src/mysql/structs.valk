@@ -1,9 +1,10 @@
 
 pointer MySQL {}
 pointer MySQLResult {}
-pointer MySQLRow {}
 pointer MySQLField {}
 pointer NET {}
+
+type MySQLRow (*[*[u8]])
 
 struct MySQLBind {
     length: *u64   // Output length pointer

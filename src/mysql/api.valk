@@ -24,6 +24,6 @@ extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], na
 
 // Result
 extern fn mysql_free_result_nonblocking(result: MySQLResult) ASYNC;
-extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: MySQLRow) ASYNC;
+extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: *?MySQLRow) ASYNC;
 extern fn mysql_num_fields(result: MySQLResult) u32;
-extern fn mysql_fetch_lengths(result: MySQLResult) ptr[u64];
+extern fn mysql_fetch_lengths(result: MySQLResult) *[u64];
