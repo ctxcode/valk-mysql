@@ -1,7 +1,39 @@
 
+use valk:time
+
 class Result {
+    con: Connection
     r: MySQLResult
 
-    fn fetch_row() !none {
+    fn fetch_row(values: Array[String]) !none !error {
+        values.clear()
+        let row : ?*[ptr] = null
+        while true {
+            let res = mysql_fetch_row_nonblocking(this.r, @stableRef(row))
+            match res {
+                ASYNC.COMPLETE => break
+                ASYNC.NOT_READY => {
+                    time:sleep_ns(1000)
+                    continue
+                }
+                ASYNC.ERROR => {
+                    let msg = mysql_error(this.con.m)
+                    throw error, msg.to(String)
+                }
+                default => throw error, "Unknown error"
+            }
+        }
+        if !isset(row) : throw none
+
+        let num_fields = mysql_num_fields(this.r)
+        let lengths = mysql_fetch_lengths(this.r)
+        let i = 0
+        while i < num_fields {
+            let data = row[i]
+            let len = lengths[i]
+            let str = String.make_from_ptr(data, len)
+            values.append(str)
+            i++
+        }
     }
 }

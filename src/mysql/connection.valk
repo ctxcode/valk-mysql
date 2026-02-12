@@ -49,16 +49,15 @@ class Connection {
 
         while true {
             let res = mysql_real_connect_nonblocking(this.m, h, this.user.data_cstring, this.password.data_cstring, this.db.data_cstring, this.port, sock, this.flag)
-
             match res {
-                ASYNC.ERROR => {
-                    let msg = mysql_error(this.m)
-                    throw error, msg.to(String)
-                }
                 ASYNC.COMPLETE => break
                 ASYNC.NOT_READY => {
                     time:sleep_ms(1)
                     continue
+                }
+                ASYNC.ERROR => {
+                    let msg = mysql_error(this.m)
+                    throw error, msg.to(String)
                 }
                 default => throw error, "Unknown error"
             }
@@ -69,18 +68,22 @@ class Connection {
         while true {
             let res = mysql_real_query_nonblocking(this.m, statement.data_cstring, statement.length)
             match res {
-                ASYNC.ERROR => throw error
                 ASYNC.COMPLETE => break
                 ASYNC.NOT_READY => {
                     time:sleep_ns(1000)
                     continue
                 }
-                default => throw error
+                ASYNC.ERROR => {
+                    let msg = mysql_error(this.m)
+                    throw error, msg.to(String)
+                }
+                default => throw error, "Unknown error"
             }
         }
         let r = mysql_use_result(this.m)
         if !isset(r) : throw error
         return Result {
+            con: this
             r: r
         }
     }

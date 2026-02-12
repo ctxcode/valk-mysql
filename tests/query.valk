@@ -9,4 +9,24 @@ test "Query" {
     }
     assert(true)
 
+    let res = con.query("SELECT * FROM users") ! {
+        println("> Query failed: " + EMSG)
+        assert(false)
+        return
+    }
+
+    // let rows : Array[String] = .{}
+    while true {
+        let values : Array[String] = .{}
+        res.fetch_row(values) ! {
+            if E == E.none : break
+            assert(false)
+            break
+        }
+        each values as val {
+            println("F: " + val)
+        }
+        // rows.append(r)
+    }
+    // assert(rows.length == 1)
 }
