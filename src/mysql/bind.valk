@@ -1,33 +1,69 @@
 
-link "mysqlclient"
+use valk:mem
 
-enum net_async_status {
-    COMPLETE
-    NOT_READY
-    ERROR
-    COMPLETE_NO_MORE_RESULTS
+extend Connection {
+    // binds: Array[<MySQLBind>] (.{})
+    bind_data: ?*[<MySQLBind>] (null)
+    bind_length: uint (0)
+    bind_size: uint (0)
+    str_binds: Array[String] (.{})
+
+    fn clear_binds() {
+        this.str_binds.clear()
+        this.bind_length = 0
+    }
+    fn close_binds() {
+        if this.bind_size > 0 : mem:free(this.bind_data)
+    }
+
+    + fn bind(value: $T) {
+
+        #if is_nullable_type(T)
+        if !isset(value) {
+            this.bind_null()
+            return
+        }
+        #end
+
+        #if is_integer_type(T)
+        this.bind_int(value)
+        #elif is_float_type(T)
+        this.bind_double(value)
+        #elif is_bool_type(T)
+        this.bind_bool(value)
+        #elif is_type_of_class(T, String)
+        this.bind_string(value)
+        #elif is_structural_type(T)
+        #loop object value as prop
+        this.bind(prop.value)
+        #end
+        #else
+        #print_type(T)
+        #error "Cannot bind this value type to the query"
+        #end
+    }
+
+    + fn bind_null() {
+    }
+
+    fn get_bind() MySQLBind {
+        // let len = thins.binds.length++
+        // let data = this.binds.increase_size(len + 1)
+        // return this.binds.get(len)
+        // return @ref(data.@cast(*[<MySQLBind>])[0])
+
+        let len = ++this.bind_length
+        if len > this.bind_size {
+            let old = this.bind_data
+            let old_size = size_of(<MySQLBind>) * this.bind_size
+            this.bind_size += 10
+            let new_size = size_of(<MySQLBind>) * this.bind_size
+            this.bind_data = mem:alloc(new_size).@cast(*[<MySQLBind>])
+            if isset(old) {
+                mem:copy(old, this.bind_data, old_size)
+                mem:free(old)
+            }
+        }
+        return @ref(this.bind_data[len - 1])
+    }
 }
-
-extern fn mysql_library_init(argc: i32, argv: ?&cstring, groups: ?&cstring) i32;
-// extern fn mysql_server_init(argc: i32, argv: &cstring, groups: &cstring) i32;
-// extern fn mysql_server_end();
-
-// Connect
-extern fn mysql_init(mysql: ?MySQL) MySQL;
-extern fn mysql_close(mysql: MySQL);
-extern fn mysql_real_connect_nonblocking(mysql: MySQL, host: ?cstring, user: cstring, passwd: cstring, db: cstring, port: u32, unix_socket: ?cstring, clientflag: u64) net_async_status;
-
-// Query
-extern fn mysql_send_query_nonblocking(mysql: MySQL, query: cstring, length: u64) net_async_status;
-extern fn mysql_real_query_nonblocking(mysql: MySQL, query: cstring, length: u64) net_async_status;
-extern fn mysql_store_result_nonblocking(mysql: MySQL, result: &MySQLResult) net_async_status;
-extern fn mysql_next_result_nonblocking(mysql: MySQL) net_async_status;
-extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) net_async_status;
-extern fn mysql_use_result(mysql: MySQL) MySQLResult;
-
-// Bind
-extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &cstring) bool;
-
-// Result
-extern fn mysql_free_result_nonblocking(result: MySQLResult) net_async_status;
-extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: MySQLRow) net_async_status;

@@ -13,7 +13,6 @@ class Connection {
     port: u32
     socket: ?String
     flag: u64
-    bindings: Array[String] (.{})
     closed: bool (false)
 
     + static fn new(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String) Connection {
@@ -38,7 +37,7 @@ class Connection {
         }
     }
 
-    fn connect() !error !closed {
+    + fn connect() !error !closed {
         if this.closed : throw closed
 
         let host = this.host
@@ -52,24 +51,27 @@ class Connection {
             let res = mysql_real_connect_nonblocking(this.m, h, this.user.data_cstring, this.password.data_cstring, this.db.data_cstring, this.port, sock, this.flag)
 
             match res {
-                net_async_status.ERROR => throw error
-                net_async_status.COMPLETE => break
-                net_async_status.NOT_READY => {
-                    time:sleep_ns(1000)
+                ASYNC.ERROR => {
+                    let msg = mysql_error(this.m)
+                    throw error, msg.to(String)
+                }
+                ASYNC.COMPLETE => break
+                ASYNC.NOT_READY => {
+                    time:sleep_ms(1)
                     continue
                 }
-                default => throw error
+                default => throw error, "Unknown error"
             }
         }
     }
 
-    fn query(statement: String) Result !error {
+    + fn query(statement: String) Result !error {
         while true {
             let res = mysql_real_query_nonblocking(this.m, statement.data_cstring, statement.length)
             match res {
-                net_async_status.ERROR => throw error
-                net_async_status.COMPLETE => break
-                net_async_status.NOT_READY => {
+                ASYNC.ERROR => throw error
+                ASYNC.COMPLETE => break
+                ASYNC.NOT_READY => {
                     time:sleep_ns(1000)
                     continue
                 }
@@ -77,18 +79,24 @@ class Connection {
             }
         }
         let r = mysql_use_result(this.m)
+        if !isset(r) : throw error
         return Result {
             r: r
         }
     }
 
     fn close() {
+        this.close_binds()
         if this.closed : return
         this.closed = true
         mysql_close(this.m)
+        // #if defined(MYSQL_DEBUG)
+        print("> Connection closed\n")
+        // #end
     }
 
     fn gc_free() {
+        print("> Closing\n")
         this.close()
     }
 }
