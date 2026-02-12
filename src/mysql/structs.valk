@@ -1,0 +1,33 @@
+
+pointer MySQL {}
+pointer MySQLResult {}
+pointer MySQLRow {}
+pointer MySQLField {}
+pointer NET {}
+
+struct MySQLBind {
+    length: *u64   // Output length pointer
+    is_null: *bool // Pointer to null indicator
+    buffer: ptr    // buffer to get/put data
+
+    // set this if you want to track data truncations happened during fetch
+    error: *bool
+    row_ptr: *u8   // for the current data position
+    store_param_func: fnptr(NET, MySQLBind)()
+    fetch_result: fnptr(MySQLBind, MySQLField, &cstring)()
+    skip_result: fnptr(MySQLBind, MySQLField, &cstring)()
+
+    // output buffer length, must be set when fetching str/binary
+    buffer_length: u64
+    offset: u64         // offset position for char/binary fetch
+    length_value: u64   // Used if length is 0
+    param_number: u32   // For null count and error messages
+    pack_length: u32    // Internal length for packed data
+    buffer_type: i32    // buffer type
+
+    error_value: bool     // used if error is 0
+    is_unsigned: bool     // set if integer type is unsigned
+    long_data_used: bool  // If used with mysql_send_long_data
+    is_null_value: bool   // Used if is_null is 0
+    extension: ptr
+}

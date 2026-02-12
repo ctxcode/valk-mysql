@@ -1,0 +1,7 @@
+
+class Result {
+    r: MySQLResult
+
+    fn fetch_row() !none {
+    }
+}

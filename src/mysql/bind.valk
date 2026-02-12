@@ -1,10 +1,6 @@
 
 link "mysqlclient"
 
-pointer MySQL {}
-pointer MySQLResult {}
-pointer MySQLRow {}
-
 enum net_async_status {
     COMPLETE
     NOT_READY
@@ -27,6 +23,10 @@ extern fn mysql_real_query_nonblocking(mysql: MySQL, query: cstring, length: u64
 extern fn mysql_store_result_nonblocking(mysql: MySQL, result: &MySQLResult) net_async_status;
 extern fn mysql_next_result_nonblocking(mysql: MySQL) net_async_status;
 extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) net_async_status;
+extern fn mysql_use_result(mysql: MySQL) MySQLResult;
+
+// Bind
+extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &cstring) bool;
 
 // Result
 extern fn mysql_free_result_nonblocking(result: MySQLResult) net_async_status;

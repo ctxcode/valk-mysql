@@ -1,8 +1,11 @@
 
 use valk:time
+use valk:core
+
+global inited : bool (false)
 
 class Connection {
-    m: Mysql
+    m: MySQL
     host: ?String
     user: String
     password: String
@@ -10,8 +13,33 @@ class Connection {
     port: u32
     socket: ?String
     flag: u64
+    bindings: Array[String] (.{})
+    closed: bool (false)
 
-    fn connect() !error {
+    + static fn new(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String) Connection {
+
+        if !inited {
+            core:race_lock()
+            mysql_library_init(0, null, null) 
+            inited = true
+            core:race_unlock()
+        }
+        let m = mysql_init(null)
+
+        return Connection {
+            m: m
+            host: host
+            user: user
+            password: password
+            db: db
+            port: port
+            socket: socket_path
+            flag: 0
+        }
+    }
+
+    fn connect() !error !closed {
+        if this.closed : throw closed
 
         let host = this.host
         let socket = this.socket
@@ -33,5 +61,34 @@ class Connection {
                 default => throw error
             }
         }
+    }
+
+    fn query(statement: String) Result !error {
+        while true {
+            let res = mysql_real_query_nonblocking(this.m, statement.data_cstring, statement.length)
+            match res {
+                net_async_status.ERROR => throw error
+                net_async_status.COMPLETE => break
+                net_async_status.NOT_READY => {
+                    time:sleep_ns(1000)
+                    continue
+                }
+                default => throw error
+            }
+        }
+        let r = mysql_use_result(this.m)
+        return Result {
+            r: r
+        }
+    }
+
+    fn close() {
+        if this.closed : return
+        this.closed = true
+        mysql_close(this.m)
+    }
+
+    fn gc_free() {
+        this.close()
     }
 }
