@@ -1,0 +1,39 @@
+
+use valk:core
+
+global inited : bool (false)
+
+class Mysql {
+    m: MySQL
+
+    + static fn new() SELF {
+        if !inited {
+            core:race_lock()
+            mysql_library_init(0, null, null) 
+            inited = true
+            core:race_unlock()
+        }
+        let m = mysql_init(null)
+
+        return SELF {
+            m: m
+        }
+    }
+
+    + fn connection(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String) Connection {
+        return Connection {
+            m: this
+            host: host
+            user: user
+            password: password
+            db: db
+            port: port
+            socket: socket_path
+            flag: 0
+        }
+    }
+
+    fn gc_free() {
+        mysql_close(this.m)
+    }
+}

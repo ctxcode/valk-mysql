@@ -1,0 +1,37 @@
+
+use valk:time
+
+class Connection {
+    m: Mysql
+    host: ?String
+    user: String
+    password: String
+    db: String
+    port: u32
+    socket: ?String
+    flag: u64
+
+    fn connect() !error {
+
+        let host = this.host
+        let socket = this.socket
+        let h : ?cstring = null
+        let sock : ?cstring = null
+        if isset(host) : h = host.data_cstring
+        if isset(socket) : sock = socket.data_cstring
+
+        while true {
+            let res = mysql_real_connect_nonblocking(this.m, h, this.user.data_cstring, this.password.data_cstring, this.db.data_cstring, this.port, sock, this.flag)
+
+            match res {
+                net_async_status.ERROR => throw error
+                net_async_status.COMPLETE => break
+                net_async_status.NOT_READY => {
+                    time:sleep_ns(1000)
+                    continue
+                }
+                default => throw error
+            }
+        }
+    }
+}

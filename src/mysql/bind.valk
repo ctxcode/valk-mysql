@@ -1,7 +1,9 @@
 
-alias MySQL for ptr
-alias MySQLResult for ptr
-alias MySQLRow for ptr
+link "mysqlclient"
+
+pointer MySQL {}
+pointer MySQLResult {}
+pointer MySQLRow {}
 
 enum net_async_status {
     COMPLETE
@@ -10,11 +12,13 @@ enum net_async_status {
     COMPLETE_NO_MORE_RESULTS
 }
 
-extern fn mysql_server_init(argc: i32, argv: &cstring, groups: &cstring) i32;
-extern fn mysql_server_end();
+extern fn mysql_library_init(argc: i32, argv: ?&cstring, groups: ?&cstring) i32;
+// extern fn mysql_server_init(argc: i32, argv: &cstring, groups: &cstring) i32;
+// extern fn mysql_server_end();
 
 // Connect
-extern fn mysql_init(mysql: MySQL) MySQL;
+extern fn mysql_init(mysql: ?MySQL) MySQL;
+extern fn mysql_close(mysql: MySQL);
 extern fn mysql_real_connect_nonblocking(mysql: MySQL, host: ?cstring, user: cstring, passwd: cstring, db: cstring, port: u32, unix_socket: ?cstring, clientflag: u64) net_async_status;
 
 // Query
