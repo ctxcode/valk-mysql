@@ -1,0 +1,29 @@
+
+alias MySQL for ptr
+alias MySQLResult for ptr
+alias MySQLRow for ptr
+
+enum net_async_status {
+    COMPLETE
+    NOT_READY
+    ERROR
+    COMPLETE_NO_MORE_RESULTS
+}
+
+extern fn mysql_server_init(argc: i32, argv: &cstring, groups: &cstring) i32;
+extern fn mysql_server_end();
+
+// Connect
+extern fn mysql_init(mysql: MySQL) MySQL;
+extern fn mysql_real_connect_nonblocking(mysql: MySQL, host: ?cstring, user: cstring, passwd: cstring, db: cstring, port: u32, unix_socket: ?cstring, clientflag: u64) net_async_status;
+
+// Query
+extern fn mysql_send_query_nonblocking(mysql: MySQL, query: cstring, length: u64) net_async_status;
+extern fn mysql_real_query_nonblocking(mysql: MySQL, query: cstring, length: u64) net_async_status;
+extern fn mysql_store_result_nonblocking(mysql: MySQL, result: &MySQLResult) net_async_status;
+extern fn mysql_next_result_nonblocking(mysql: MySQL) net_async_status;
+extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) net_async_status;
+
+// Result
+extern fn mysql_free_result_nonblocking(result: MySQLResult) net_async_status;
+extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: MySQLRow) net_async_status;

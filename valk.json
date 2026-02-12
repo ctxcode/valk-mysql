@@ -1,0 +1,7 @@
+{
+    "name": "mysql",
+    "use": "0.1.0",
+    "namespaces": {
+        "mysql": "src/mysql"
+    }
+}
