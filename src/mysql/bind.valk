@@ -2,26 +2,36 @@
 use valk:mem
 
 extend Connection {
-    // binds: Array[<MySQLBind>] (.{})
     bind_data: ?*[<MySQLBind>] (null)
     bind_length: uint (0)
     bind_size: uint (0)
-    str_binds: Array[String] (.{})
+    //
+    bind_values: Array[Col] (.{})
+    bind_used_values: Array[Col] (.{})
 
-    fn clear_binds() {
-        this.str_binds.clear()
+    + fn clear_binds() {
+        each this.bind_used_values as b {
+            b.clear()
+            this.bind_values.append(b)
+        }
         this.bind_length = 0
     }
     fn close_binds() {
         if this.bind_size > 0 : mem:free(this.bind_data)
     }
 
-    + fn bind(value: $T) {
+    + fn bind(name: String, value: $T) {
+        let col = this.bind_gen(value)
+        col.name = name
+    }
+    + fn bindv(value: $T) {
+        this.bind_gen(value)
+    }
+    - fn bind_gen(value: $T) Col {
 
         #if is_nullable_type(T)
         if !isset(value) {
-            this.bind_null()
-            return
+            return this.bind_null()
         }
         #end
 
@@ -43,15 +53,43 @@ extend Connection {
         #end
     }
 
-    + fn bind_null() {
+    + fn bind_null() Col {
+        let col = this.get_bind()
+        col.type == COLTYPE.null
+        return col
+    }
+    + fn bind_int(value: int) Col {
+        let col = this.get_bind()
+        col.type == COLTYPE.int
+        col.value_int = value
+        return col
+    }
+    + fn bind_float(value: f64) Col {
+        let col = this.get_bind()
+        col.type == COLTYPE.float
+        col.value_float = value
+        return col
+    }
+    + fn bind_bool(value: bool) Col {
+        let col = this.get_bind()
+        col.type == COLTYPE.bool
+        col.value_bool = value
+        return col
+    }
+    + fn bind_string(value: String) Col {
+        let col = this.get_bind()
+        col.type == COLTYPE.string
+        col.value_string = value
+        return col
     }
 
-    fn get_bind() MySQLBind {
-        // let len = thins.binds.length++
-        // let data = this.binds.increase_size(len + 1)
-        // return this.binds.get(len)
-        // return @ref(data.@cast(*[<MySQLBind>])[0])
+    fn get_bind() Col {
+        let col = this.bind_values.pop_last() !? Col{}
+        this.bind_used_values.append(col)
+        return col
+    }
 
+    fn get_mysql_bind() MySQLBind {
         let len = ++this.bind_length
         if len > this.bind_size {
             let old = this.bind_data

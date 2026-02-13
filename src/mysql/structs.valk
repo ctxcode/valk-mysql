@@ -1,7 +1,6 @@
 
 pointer MySQL {}
 pointer MySQLResult {}
-pointer MySQLField {}
 pointer NET {}
 
 type MySQLRow (*[*[u8]])
@@ -31,4 +30,28 @@ struct MySQLBind {
     long_data_used: bool  // If used with mysql_send_long_data
     is_null_value: bool   // Used if is_null is 0
     extension: ptr
+}
+
+struct MySQLField {
+  name: cstring               // Name of column
+  org_name: cstring           // Original column name, if an alias
+  table: cstring              // Table of column if column was a field
+  org_table: cstring          // Org table name, if table was an alias
+  db: cstring                 // Database for table
+  catalog: cstring            // Catalog for table
+  def: cstring                // Default value (set by mysql_list_fields)
+  length: u64                 // Width of column (create length)
+  max_length: u64             // Max width for selected set
+  name_length: u32
+  org_name_length: u32
+  table_length: u32
+  org_table_length: u32
+  db_length: u32
+  catalog_length: u32
+  def_length: u32
+  flags: u32         // Div flags
+  decimals: u32      // Number of decimals in field
+  charsetnr: u32     // Character set
+  type: FIELD_TYPE   // Type of field. See mysql_com.h for types
+  extension: ptr
 }

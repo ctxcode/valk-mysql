@@ -1,0 +1,43 @@
+
+enum COLTYPE {
+    null
+    bool
+    int
+    float
+    string
+}
+
+class Col {
+    name: ?String (null)
+    type: COLTYPE (COLTYPE.null)
+    value_int: int (0)
+    value_float: f64 (0)
+    value_string: String ("")
+    value_bool: bool (false)
+
+    fn clear() {
+        this.name = null
+        this.type = COLTYPE.null
+        this.value_string = ""
+        this.value_int = 0
+        this.value_float = 0
+        this.value_bool = false
+    }
+
+    get bool : bool !null {
+        if this.type == COLTYPE.null : throw null
+        return this.value_bool
+    }
+    get int : int !null {
+        if this.type == COLTYPE.null : throw null
+        return this.value_int
+    }
+    get float : f64 !null {
+        if this.type == COLTYPE.null : throw null
+        return this.value_float
+    }
+    get string : String !null {
+        if this.type == COLTYPE.null : throw null
+        return this.value_string
+    }
+}

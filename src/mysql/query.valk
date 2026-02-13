@@ -1,0 +1,11 @@
+
+extend Connection {
+    + fn run(query: String, args: $T) !error {
+        this.bind(args)
+        this.exec() !>
+    }
+    + fn first(query: String, args: $T) !error {
+        this.bind(args)
+        this.exec() !>
+    }
+}

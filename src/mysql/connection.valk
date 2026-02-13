@@ -15,7 +15,7 @@ class Connection {
     flag: u64
     closed: bool (false)
 
-    + static fn new(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String) Connection {
+    + static fn new(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String (null)) Connection {
 
         if !inited {
             core:race_lock()

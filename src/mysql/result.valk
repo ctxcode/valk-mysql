@@ -27,6 +27,7 @@ class Result {
 
         let num_fields = mysql_num_fields(this.r)
         let lengths = mysql_fetch_lengths(this.r)
+        let fields = mysql_fetch_fields(this.r)
         let i = 0
         while i < num_fields {
             let data = row[i]
