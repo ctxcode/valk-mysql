@@ -1,13 +1,14 @@
 
 pointer MySQL {}
 pointer MySQLResult {}
+pointer MySQLStatement {}
 pointer NET {}
 
 type MySQLRow (*[*[u8]])
 
 struct MySQLBind {
     length: *u64   // Output length pointer
-    is_null: *bool // Pointer to null indicator
+    is_null: ?*bool // Pointer to null indicator
     buffer: ptr    // buffer to get/put data
 
     // set this if you want to track data truncations happened during fetch

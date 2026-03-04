@@ -20,7 +20,7 @@ extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) A
 extern fn mysql_use_result(mysql: MySQL) ?MySQLResult;
 
 // Bind
-extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &cstring) bool;
+extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &[?cstring]) bool;
 
 // Result
 extern fn mysql_free_result_nonblocking(result: MySQLResult) ASYNC;
@@ -28,3 +28,12 @@ extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: *?MySQLRow) ASYN
 extern fn mysql_num_fields(result: MySQLResult) u32;
 extern fn mysql_fetch_lengths(result: MySQLResult) *[u64];
 extern fn mysql_fetch_fields(result: MySQLResult) *[<MySQLField>];
+
+// Statement
+extern fn mysql_stmt_init(mysql: MySQL) ?MySQLStatement;
+extern fn mysql_stmt_close(stmt: MySQLStatement) bool;
+extern fn mysql_stmt_prepare(stmt: MySQLStatement, query: cstring, len: uint) i32;
+extern fn mysql_stmt_execute(stmt: MySQLStatement) i32;
+extern fn mysql_stmt_error(stmt: MySQLStatement) cstring;
+extern fn mysql_stmt_bind_param(stmt: MySQLStatement, binds: &[<MySQLBind>]) cstring;
+extern fn mysql_stmt_result_metadata(stmt: MySQLStatement) ?MySQLResult;

@@ -4,16 +4,16 @@ use valk:core
 
 global inited : bool (false)
 
-class Connection {
++ class Connection {
     m: MySQL
-    host: ?String
-    user: String
-    password: String
-    db: String
-    port: u32
-    socket: ?String
-    flag: u64
-    closed: bool (false)
+    ~ host: ?String
+    ~ user: String
+    ~ password: String
+    ~ db: String
+    ~ port: u32
+    ~ socket: ?String
+    ~ flag: u64
+    ~ closed: bool (false)
 
     + static fn new(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String (null)) Connection {
 
@@ -64,32 +64,17 @@ class Connection {
         }
     }
 
-    + fn query(statement: String) Result !error {
-        while true {
-            let res = mysql_real_query_nonblocking(this.m, statement.data_cstring, statement.length)
-            match res {
-                ASYNC.COMPLETE => break
-                ASYNC.NOT_READY => {
-                    time:sleep_ns(1000)
-                    continue
-                }
-                ASYNC.ERROR => {
-                    let msg = mysql_error(this.m)
-                    throw error, msg.to(String)
-                }
-                default => throw error, "Unknown error"
-            }
-        }
-        let r = mysql_use_result(this.m)
-        if !isset(r) : throw error
-        return Result {
+    + fn query(statement: String) Statement !error {
+        let s = mysql_stmt_init(this.m)
+        if !isset(s) : throw error, "Failed to initialize statement"
+        return Statement {
             con: this
-            r: r
+            stmt: s
+            query: statement
         }
     }
 
     fn close() {
-        this.close_binds()
         if this.closed : return
         this.closed = true
         mysql_close(this.m)

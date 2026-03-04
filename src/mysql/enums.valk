@@ -12,12 +12,12 @@ enum FIELD_TYPE : i32 {
     SHORT
     LONG
     FLOAT
-    DOUBLE
+    DOUBLE // 5
     NULL
     TIMESTAMP
     LONGLONG
     INT24
-    DATE
+    DATE // 10
     TIME
     DATETIME
     YEAR

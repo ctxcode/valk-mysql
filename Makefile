@@ -1,5 +1,6 @@
 
+vc=~/www/valk2/valk
 test:
-	valk build ./tests/*.valk ./tests --test -r
+	$(vc) build ./tests/*.valk ./tests --test -r
 debug:
-	~/www/valk2/valk build ./tests/*.valk ./tests --test -r
+	$(vc) build ./tests/*.valk ./tests --test -r
