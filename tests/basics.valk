@@ -2,20 +2,25 @@
 use mysql
 
 test "Query" {
-    let con = mysql:Connection.new("127.0.0.1", "root", "root", "valk", 3306, null)
-    con.connect() ! {
-        println("> Connection failed: " + EMSG)
-        assert(false)
-    }
-    assert(true)
-
-    let q = con.query("SELECT * FROM users WHERE id > ?") !!
-    q.bindv(10)
-    let rows = q.select() ! {
-        println("> Query failed: " + EMSG)
+    let con = mysql:connect("127.0.0.1", "root", "root", "valk", 3306) ! {
+        println(EMSG)
+        println("MySQL connection failed")
         assert(false)
         return
     }
+    // con.connect() ! {
+    //     println("> Connection failed: " + EMSG)
+    //     assert(false)
+    // }
+    // assert(true)
 
-    assert(rows.length == 1)
+    // let q = con.query("SELECT * FROM users WHERE id > ?") !!
+    // q.bindv(10)
+    // let rows = q.select() ! {
+    //     println("> Query failed: " + EMSG)
+    //     assert(false)
+    //     return
+    // }
+
+    // assert(rows.length == 1)
 }

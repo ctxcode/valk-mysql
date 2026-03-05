@@ -1,0 +1,67 @@
+
+enum CAP {
+ 	// Use the improved version of Old Password Authentication.
+    CLIENT_LONG_PASSWORD (1)
+ 	// Send found rows instead of affected rows in EOF_Packet.
+    CLIENT_FOUND_ROWS (2)
+ 	// Get all column flags.
+    CLIENT_LONG_FLAG (4)
+ 	// Database (schema) name can be specified on connect in Handshake Response Packet.
+    CLIENT_CONNECT_WITH_DB (8)
+ 	// DEPRECATED: Don't allow database.table.column.
+    CLIENT_NO_SCHEMA (16)
+ 	// Compression protocol supported.
+    CLIENT_COMPRESS (32)
+ 	// Special handling of ODBC behavior.
+    CLIENT_ODBC (64)
+ 	// Can use LOAD DATA LOCAL.
+    CLIENT_LOCAL_FILES (128)
+ 	// Ignore spaces before '('.
+    CLIENT_IGNORE_SPACE (256)
+ 	// New 4.1 protocol.
+    CLIENT_PROTOCOL_41 (512)
+ 	// This is an interactive client.
+    CLIENT_INTERACTIVE (1024)
+ 	// Use SSL encryption for the session.
+    CLIENT_SSL (2048)
+ 	// Client only flag.
+    CLIENT_IGNORE_SIGPIPE (4096)
+ 	// Client knows about transactions.
+    CLIENT_TRANSACTIONS (8192)
+ 	// DEPRECATED: Old flag for 4.1 protocol
+    CLIENT_RESERVED (16384)
+ 	// DEPRECATED: Old flag for 4.1 authentication \ CLIENT_SECURE_CONNECTION.
+    CLIENT_RESERVED2 (32768)
+ 	// Enable/disable multi-stmt support.
+    CLIENT_MULTI_STATEMENTS (1 << 16)
+ 	// Enable/disable multi-results.
+    CLIENT_MULTI_RESULTS (1 << 17)
+ 	// Multi-results and OUT parameters in PS-protocol.
+    CLIENT_PS_MULTI_RESULTS (1 << 18)
+ 	// Client supports plugin authentication.
+    CLIENT_PLUGIN_AUTH (1 << 19)
+ 	// Client supports connection attributes.
+    CLIENT_CONNECT_ATTRS (1 << 20)
+ 	// Enable authentication response packet to be larger than 255 bytes.
+    CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA (1 << 21)
+ 	// Don't close the connection for a user account with expired password.
+    CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS (1 << 22)
+ 	// Capable of handling server state change information.
+    CLIENT_SESSION_TRACK (1 << 23)
+ 	// Client no longer needs EOF_Packet and will use OK_Packet instead.
+    CLIENT_DEPRECATE_EOF (1 << 24)
+ 	// The client can handle optional metadata information in the resultset.
+    CLIENT_OPTIONAL_RESULTSET_METADATA (1 << 25)
+ 	// Compression protocol extended to support zstd compression method.
+    CLIENT_ZSTD_COMPRESSION_ALGORITHM (1 << 26)
+ 	// Support optional extension for query parameters into the COM_QUERY and COM_STMT_EXECUTE packets.
+    CLIENT_QUERY_ATTRIBUTES (1 << 27)
+ 	// Support Multi factor authentication.
+    MULTI_FACTOR_AUTHENTICATION (1 << 28)
+ 	// This flag will be reserved to extend the 32bit capabilities structure to 64bits.
+    CLIENT_CAPABILITY_EXTENSION (1 << 29)
+ 	// Verify server certificate.
+    CLIENT_SSL_VERIFY_SERVER_CERT (1 << 30)
+    //
+    CLIENT_REMEMBER_OPTIONS (1 << 31)
+}

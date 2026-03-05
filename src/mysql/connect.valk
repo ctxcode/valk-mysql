@@ -1,4 +1,116 @@
 
-// fn connect(host: ?String, user: String, password: String, db: String, port: u32, socket_path: ?String (null)) Connection {
-// class Connection {
-// }
+use valk:net
+
+fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !connect !handshake {
+
+    let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw connect
+
+    let con = Connection {
+        con: sock
+    }
+    con.init() !>
+
+    return con
+}
+
+class Connection {
+    con: net:Connection
+    sendbuf: ByteBuffer (.new())
+    packetbuf: ByteBuffer (.new())
+    recvbuf: ByteBuffer (.new())
+    seqid: u8 (0)
+    // Connection info
+    con_id : uint (0)
+    caps: uint (0)
+    auth_plugin: String ("")
+    //
+
+    fn init() !handshake !unsupported {
+        let buf = this.recvbuf
+        buf.clear()
+        let len = this.con.recv(buf, 1024) ! throw handshake
+        println(len)
+        // println(buf)
+        this.parse_handshake() !>
+    }
+
+    fn parse_handshake() !unsupported {
+        let data = this.recvbuf.data.@cast(ptr)
+        // let payload_len = read_int(data, 3)
+        data += 3
+        // let seq_id = read_int(data, 1)
+        data += 1
+        //
+        let proto = read_int(data, 1) // Always 10
+        if proto != 10 : throw unsupported, "Unsupported protocol version"
+        data += 1
+        //
+        let version : String = data.@cast(cstring)
+        data += version.length + 1
+        //
+        this.con_id = read_int(data, 4)
+        data += 4
+        // auth-plugin-data-part-1
+        data += 8
+        // filler
+        data += 1
+        // capability_flags_1
+        let caps = read_int(data, 2)
+        data += 2
+        // character_set
+        // let charset = read_int(data, 1)
+        data += 1
+        // status_flags
+        // let status_flags = read_int(data, 2)
+        data += 2
+        // capability_flags_2
+        let caps2 = read_int(data, 2)
+        caps = (caps2 << 16) | caps
+        this.caps = caps
+        data += 2
+        //
+        let auth_plugin_data_len : uint = 0
+        if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
+            // length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
+            auth_plugin_data_len = read_int(data, 1)
+        } else {
+            // let skip = read_int(data, 1)
+        }
+        data += 1
+        // reserved bytes
+        data += 10
+        // auth-plugin-data-part-2
+        // Rest of the plugin provided data (scramble), $len=MAX(13, length of auth-plugin-data - 8)
+        let auth_p2_len : uint = 13
+        if auth_plugin_data_len - 8 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 8
+        data += auth_p2_len
+        //
+        if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
+            // name of the auth_method that the auth_plugin_data belongs to
+            let plugin_name : String = data.@cast(cstring)
+            this.auth_plugin = plugin_name
+            data += plugin_name.bytes + 1
+        }
+
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+
+
+    }
+
+    fn send() !send {
+        let sb = this.sendbuf
+        let pb = this.packetbuf
+        let id = this.seqid++
+        pb.clear()
+        pb.minimum_free_space(4)
+        let len = sb.length
+        write_int3(pb.data, len)
+        pb.length += 3
+        write_int1(pb.data.@offset(pb.length), id)
+        pb.length += 1
+        pb.append(sb)
+
+        this.con.send_buffer(pb, 0, true) ! throw send
+    }
+}

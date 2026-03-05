@@ -1,126 +1,126 @@
 
-use valk:thread
-use valk:type
-use valk:json
+// use valk:thread
+// use valk:type
+// use valk:json
 
-type Value (json:Value)
+// type Value (json:Value)
 
-+ class Statement {
-    con: Connection
-    stmt: MySQLStatement
-    query: String
-    named_binds: Map[Array[Value]] (.{})
-    binds: Array[Value] (.{})
-    final_binds: Array[Bind] (.{})
-    has_error: bool (false)
-    execed: bool (false)
-    closed: bool (false)
+// + class Statement {
+//     con: Connection
+//     stmt: MySQLStatement
+//     query: String
+//     named_binds: Map[Array[Value]] (.{})
+//     binds: Array[Value] (.{})
+//     final_binds: Array[Bind] (.{})
+//     has_error: bool (false)
+//     execed: bool (false)
+//     closed: bool (false)
 
-    fn exec() !error {
-        if this.execed : return
-        this.execed = true
+//     fn exec() !error {
+//         if this.execed : return
+//         this.execed = true
 
-        // Replace named params
-        let query = this.replace_named_params(this.query) ! throw error, EMSG
+//         // Replace named params
+//         let query = this.replace_named_params(this.query) ! throw error, EMSG
 
-        // Prepare
-        let err = mysql_stmt_prepare(this.stmt, query.data_cstring, query.bytes)
-        if err != 0 : throw error, this.get_error()
+//         // Prepare
+//         let err = mysql_stmt_prepare(this.stmt, query.data_cstring, query.bytes)
+//         if err != 0 : throw error, this.get_error()
 
-        // Run in thread
-        let task = thread:task(fn(){
+//         // Run in thread
+//         let task = thread:task(fn(){
 
-            // Binds
-            let binds = this.allocate_bindings()
-            if isset(binds) : mysql_stmt_bind_param(this.stmt, binds.@cast(*[<MySQLBind>]))
+//             // Binds
+//             let binds = this.allocate_bindings()
+//             if isset(binds) : mysql_stmt_bind_param(this.stmt, binds.@cast(*[<MySQLBind>]))
 
-            // Execute
-            let err = mysql_stmt_execute(this.stmt)
-            if err != 0 {
-                this.has_error = true
-                return
-            }
-        }) ! throw error
+//             // Execute
+//             let err = mysql_stmt_execute(this.stmt)
+//             if err != 0 {
+//                 this.has_error = true
+//                 return
+//             }
+//         }) ! throw error
 
-        task.await()
-        if this.has_error : throw error, this.get_error()
-    }
+//         task.await()
+//         if this.has_error : throw error, this.get_error()
+//     }
 
-    + fn get_error() ?String {
-        let err = mysql_stmt_error(this.stmt)
-        if err[0] == 0 : return null
-        return err
-    }
+//     + fn get_error() ?String {
+//         let err = mysql_stmt_error(this.stmt)
+//         if err[0] == 0 : return null
+//         return err
+//     }
 
-    + fn close() {
-        if this.closed : return
-        this.closed = true
-        this.execed = true
-        this.clear_binds()
-        mysql_stmt_close(this.stmt)
-    }
+//     + fn close() {
+//         if this.closed : return
+//         this.closed = true
+//         this.execed = true
+//         this.clear_binds()
+//         mysql_stmt_close(this.stmt)
+//     }
 
-    + fn clear_binds() {
-        this.binds.clear()
-        this.named_binds.clear()
-        this.final_binds.clear()
-    }
+//     + fn clear_binds() {
+//         this.binds.clear()
+//         this.named_binds.clear()
+//         this.final_binds.clear()
+//     }
 
-    + fn replace_named_params(query: String) String !error {
-        let r = type:StringComposer.new()
-        let str_mode = false
-        let ignore_next = false
-        let binds = this.binds
-        let final_binds = this.final_binds
-        let bindi : uint = 0
+//     + fn replace_named_params(query: String) String !error {
+//         let r = type:StringComposer.new()
+//         let str_mode = false
+//         let ignore_next = false
+//         let binds = this.binds
+//         let final_binds = this.final_binds
+//         let bindi : uint = 0
 
-        each query as ch, i {
-            if str_mode {
-                r.append_byte(ch)
-                if ignore_next {
-                    ignore_next = false
-                    continue
-                }
-                if ch == '\\' : ignore_next = true
-                else if ch == '"' : str_mode = false
-                continue
-            }
-            if ch == ':' {
-                let start = i + 1
-                let nch = query[start]
-                if nch.is_alpha() || nch == '_' {
-                    let end = start
-                    while true {
-                        let nch = query[end + 1]
-                        if nch.is_alpha_numeric() || nch == '_' {
-                            end++
-                            continue
-                        }
-                        break
-                    }
-                    let len = end - start + 1
-                    let name = query.part(start, len)
-                    let values = this.named_binds.get(name) ! throw error, "Cannot find named binding: '" + name + "'"
-                    each values as val {
-                        r.append_byte('?')
-                        final_binds.append(Bind{ v: val })
-                    }
-                    i += len
-                    continue
-                }
-            } else if ch == '?' {
-                let val = binds.get(bindi++) ! throw error, "You have more '?' tokens than the amount of binded values"
-                final_binds.append(Bind{ v: val })
-            } else if ch == '"' {
-                str_mode = true
-            }
-            r.append_byte(ch)
-        }
+//         each query as ch, i {
+//             if str_mode {
+//                 r.append_byte(ch)
+//                 if ignore_next {
+//                     ignore_next = false
+//                     continue
+//                 }
+//                 if ch == '\\' : ignore_next = true
+//                 else if ch == '"' : str_mode = false
+//                 continue
+//             }
+//             if ch == ':' {
+//                 let start = i + 1
+//                 let nch = query[start]
+//                 if nch.is_alpha() || nch == '_' {
+//                     let end = start
+//                     while true {
+//                         let nch = query[end + 1]
+//                         if nch.is_alpha_numeric() || nch == '_' {
+//                             end++
+//                             continue
+//                         }
+//                         break
+//                     }
+//                     let len = end - start + 1
+//                     let name = query.part(start, len)
+//                     let values = this.named_binds.get(name) ! throw error, "Cannot find named binding: '" + name + "'"
+//                     each values as val {
+//                         r.append_byte('?')
+//                         final_binds.append(Bind{ v: val })
+//                     }
+//                     i += len
+//                     continue
+//                 }
+//             } else if ch == '?' {
+//                 let val = binds.get(bindi++) ! throw error, "You have more '?' tokens than the amount of binded values"
+//                 final_binds.append(Bind{ v: val })
+//             } else if ch == '"' {
+//                 str_mode = true
+//             }
+//             r.append_byte(ch)
+//         }
 
-        return r.to_string()
-    }
+//         return r.to_string()
+//     }
 
-    fn gc_free() {
-        this.close()
-    }
-}
+//     fn gc_free() {
+//         this.close()
+//     }
+// }

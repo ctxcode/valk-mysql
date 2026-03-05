@@ -1,42 +1,42 @@
 
-link "mysqlclient"
+// link "mysqlclient"
 
-// Init
-alias mysql_library_init for mysql_server_init
-extern fn mysql_server_init(argc: i32, argv: ?&cstring, groups: ?&cstring) i32;
+// // Init
+// alias mysql_library_init for mysql_server_init
+// extern fn mysql_server_init(argc: i32, argv: ?&cstring, groups: ?&cstring) i32;
 
-// Connect
-extern fn mysql_init(mysql: ?MySQL) MySQL;
-extern fn mysql_close(mysql: MySQL);
-extern fn mysql_real_connect_nonblocking(mysql: MySQL, host: ?cstring, user: cstring, passwd: cstring, db: cstring, port: u32, unix_socket: ?cstring, clientflag: u64) ASYNC;
-extern fn mysql_error(mysql: MySQL) cstring;
+// // Connect
+// extern fn mysql_init(mysql: ?MySQL) MySQL;
+// extern fn mysql_close(mysql: MySQL);
+// extern fn mysql_real_connect_nonblocking(mysql: MySQL, host: ?cstring, user: cstring, passwd: cstring, db: cstring, port: u32, unix_socket: ?cstring, clientflag: u64) ASYNC;
+// extern fn mysql_error(mysql: MySQL) cstring;
 
-// Query
-extern fn mysql_send_query_nonblocking(mysql: MySQL, query: cstring, length: u64) ASYNC;
-extern fn mysql_real_query_nonblocking(mysql: MySQL, query: cstring, length: u64) ASYNC;
-extern fn mysql_store_result_nonblocking(mysql: MySQL, result: &MySQLResult) ASYNC;
-extern fn mysql_next_result_nonblocking(mysql: MySQL) ASYNC;
-extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) ASYNC;
-extern fn mysql_use_result(mysql: MySQL) ?MySQLResult;
+// // Query
+// extern fn mysql_send_query_nonblocking(mysql: MySQL, query: cstring, length: u64) ASYNC;
+// extern fn mysql_real_query_nonblocking(mysql: MySQL, query: cstring, length: u64) ASYNC;
+// extern fn mysql_store_result_nonblocking(mysql: MySQL, result: &MySQLResult) ASYNC;
+// extern fn mysql_next_result_nonblocking(mysql: MySQL) ASYNC;
+// extern fn mysql_select_db_nonblocking(mysql: MySQL, db: cstring, error: &bool) ASYNC;
+// extern fn mysql_use_result(mysql: MySQL) ?MySQLResult;
 
-// Bind
-extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &[?cstring]) bool;
+// // Bind
+// extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &[?cstring]) bool;
 
-// Result
-extern fn mysql_free_result(result: MySQLResult);
-extern fn mysql_free_result_nonblocking(result: MySQLResult) ASYNC;
-extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: *?MySQLRow) ASYNC;
-extern fn mysql_num_fields(result: MySQLResult) u32;
-extern fn mysql_fetch_lengths(result: MySQLResult) *[u64];
-extern fn mysql_fetch_fields(result: MySQLResult) *[<MySQLField>];
+// // Result
+// extern fn mysql_free_result(result: MySQLResult);
+// extern fn mysql_free_result_nonblocking(result: MySQLResult) ASYNC;
+// extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: *?MySQLRow) ASYNC;
+// extern fn mysql_num_fields(result: MySQLResult) u32;
+// extern fn mysql_fetch_lengths(result: MySQLResult) *[u64];
+// extern fn mysql_fetch_fields(result: MySQLResult) *[<MySQLField>];
 
-// Statement
-extern fn mysql_stmt_init(mysql: MySQL) ?MySQLStatement;
-extern fn mysql_stmt_close(stmt: MySQLStatement) bool;
-extern fn mysql_stmt_prepare(stmt: MySQLStatement, query: cstring, len: uint) i32;
-extern fn mysql_stmt_execute(stmt: MySQLStatement) i32;
-extern fn mysql_stmt_error(stmt: MySQLStatement) cstring;
-extern fn mysql_stmt_bind_param(stmt: MySQLStatement, binds: &[<MySQLBind>]) cstring;
-extern fn mysql_stmt_result_metadata(stmt: MySQLStatement) ?MySQLResult;
-extern fn mysql_stmt_fetch(stmt: MySQLStatement) i32;
-extern fn mysql_stmt_affected_rows(result: MySQLResult) u64;
+// // Statement
+// extern fn mysql_stmt_init(mysql: MySQL) ?MySQLStatement;
+// extern fn mysql_stmt_close(stmt: MySQLStatement) bool;
+// extern fn mysql_stmt_prepare(stmt: MySQLStatement, query: cstring, len: uint) i32;
+// extern fn mysql_stmt_execute(stmt: MySQLStatement) i32;
+// extern fn mysql_stmt_error(stmt: MySQLStatement) cstring;
+// extern fn mysql_stmt_bind_param(stmt: MySQLStatement, binds: &[<MySQLBind>]) cstring;
+// extern fn mysql_stmt_result_metadata(stmt: MySQLStatement) ?MySQLResult;
+// extern fn mysql_stmt_fetch(stmt: MySQLStatement) i32;
+// extern fn mysql_stmt_affected_rows(result: MySQLResult) u64;

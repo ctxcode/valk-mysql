@@ -1,174 +1,102 @@
 
-use valk:time
+// use valk:time
 
-+ class Row {
-    names: Array[String] (.{})
-    values: Array[Value] (.{})
+// + class Row {
+//     names: Array[String] (.{})
+//     values: Array[Value] (.{})
 
-    + fn copy() SELF {
-        return SELF {
-            names: this.names
-            values: this.values.copy()
-        }
-    }
-}
+//     + fn copy() SELF {
+//         return SELF {
+//             names: this.names
+//             values: this.values.copy()
+//         }
+//     }
+// }
 
-type CurrentRow (Row)
+// type CurrentRow (Row)
 
-extend Statement {
+// extend Statement {
 
-    + fn run(query: String) uint !error {
-        this.exec() !>
-        let r = mysql_stmt_result_metadata(this.stmt)
-        let rows = mysql_stmt_affected_rows(r)
-        mysql_free_result(r)
-        return rows
-    }
-    + fn selectFirst() ?Row !error {
-        let row = Row{}
-        this.select_init(row) !>
-        let r = mysql_stmt_fetch(this.stmt)
-        this.fetch_row(r, row) ! {
-            if E == E.end : return null
-            throw error, EMSG
-        }
-        return row
-    }
-    + fn select() Array[Row] !error {
-        let row = Row{}
-        this.select_init(row) !>
-        let r = mysql_stmt_fetch(this.stmt)
-        let list = Array[Row]{}
-        while true {
-            this.fetch_row(r, row) ! {
-                if E == E.end : break
-                throw error, EMSG
-            }
-            list.append(row.copy())
-        }
-        return list
-    }
-    fn select_init(row: Row) !error {
-        this.exec() !>
-        let r = mysql_stmt_result_metadata(this.stmt)
-        if !isset(r) : throw error, "No result"
+//     + fn run(query: String) uint !error {
+//         this.exec() !>
+//         let r = mysql_stmt_result_metadata(this.stmt)
+//         let rows = mysql_stmt_affected_rows(r)
+//         mysql_free_result(r)
+//         return rows
+//     }
+//     + fn selectFirst() ?Row !error {
+//         let row = Row{}
+//         this.select_init(row) !>
+//         let r = mysql_stmt_fetch(this.stmt)
+//         this.fetch_row(r, row) ! {
+//             if E == E.end : return null
+//             throw error, EMSG
+//         }
+//         return row
+//     }
+//     + fn select() Array[Row] !error {
+//         let row = Row{}
+//         this.select_init(row) !>
+//         let r = mysql_stmt_fetch(this.stmt)
+//         let list = Array[Row]{}
+//         while true {
+//             this.fetch_row(r, row) ! {
+//                 if E == E.end : break
+//                 throw error, EMSG
+//             }
+//             list.append(row.copy())
+//         }
+//         return list
+//     }
+//     fn select_init(row: Row) !error {
+//         this.exec() !>
+//         let r = mysql_stmt_result_metadata(this.stmt)
+//         if !isset(r) : throw error, "No result"
 
-        let num_fields = mysql_num_fields(r)
-        // Field names
-        let fields = mysql_fetch_fields(r)
-        let i = 0
-        while i < num_fields {
-            let field = &fields[0]
-            row.names.append(field.name)
-            i++
-        }
-        mysql_free_result(r)
-    }
+//         let num_fields = mysql_num_fields(r)
+//         // Field names
+//         let fields = mysql_fetch_fields(r)
+//         let i = 0
+//         while i < num_fields {
+//             let field = &fields[0]
+//             row.names.append(field.name)
+//             i++
+//         }
+//         mysql_free_result(r)
+//     }
 
-    fn fetch_row(r: MySQLResult, cur: CurrentRow) !error !end {
+//     fn fetch_row(r: MySQLResult, cur: CurrentRow) !error !end {
 
-        cur.values.clear()
-        let row : ?MySQLRow = null
-        while true {
-            let res = mysql_fetch_row_nonblocking(r, @stableRef(row))
-            println(res)
-            match res {
-                ASYNC.COMPLETE => break
-                ASYNC.NOT_READY => {
-                    time:sleep_ns(1000)
-                    continue
-                }
-                ASYNC.ERROR => {
-                    throw error, this.get_error()
-                }
-                default => break
-            }
-        }
-        println("R")
-        if !isset(row) : throw end
+//         cur.values.clear()
+//         let row : ?MySQLRow = null
+//         while true {
+//             let res = mysql_fetch_row_nonblocking(r, @stableRef(row))
+//             println(res)
+//             match res {
+//                 ASYNC.COMPLETE => break
+//                 ASYNC.NOT_READY => {
+//                     time:sleep_ns(1000)
+//                     continue
+//                 }
+//                 ASYNC.ERROR => {
+//                     throw error, this.get_error()
+//                 }
+//                 default => break
+//             }
+//         }
+//         println("R")
+//         if !isset(row) : throw end
 
-        // Handle results
-        let num_fields = mysql_num_fields(r)
-        let lengths = mysql_fetch_lengths(r)
-        let i = 0
-        while i < num_fields {
-            let data = row[i]
-            let len = lengths[i]
-            let str = String.make_from_ptr(data, len)
-            // values.append(str)
-            i++
-        }
-    }
-
-    // + fn exec(statement: String) MySQLResult !error {
-    //     // Bindings
-    //     if this.used_values.length > 0 {
-    //         let type_map = [i32 x 5]{FIELD_TYPE.NULL, FIELD_TYPE.TINY, FIELD_TYPE.LONGLONG, FIELD_TYPE.DOUBLE, FIELD_TYPE.STRING}
-    //         each this.used_values as val {
-    //             let bind, nameslot = this.get_mysql_bind()
-    //             // let binds : *[<MySQLBind>] = this.bind_data.@cast(*[<MySQLBind>])
-    //             // let names : *[?cstring] = this.bind_names.@cast(*[?cstring])
-    //             // let bind = binds[index]
-    //             bind.buffer_type = type_map[val.type]
-    //             bind.is_null = null
-    //             if val.type == TYPE.null {
-    //                 let isnull : bool = true
-    //                 bind.is_null = @ref(isnull)
-    //             } else if val.type == TYPE.bool {
-    //                 let size : u64 = size_of(bool)
-    //                 bind.buffer = @ref(val.value_bool)
-    //                 bind.length = @stableRef(size)
-    //                 bind.is_unsigned = true
-    //             } else if val.type == TYPE.int {
-    //                 let size : u64 = size_of(int)
-    //                 bind.buffer = @ref(val.value_int)
-    //                 bind.length = @stableRef(size)
-    //                 bind.is_unsigned = false
-    //             } else if val.type == TYPE.float {
-    //                 let size : u64 = size_of(f64)
-    //                 bind.buffer = @ref(val.value_float)
-    //                 bind.length = @stableRef(size)
-    //                 bind.is_unsigned = false
-    //             } else if val.type == TYPE.string {
-    //                 bind.buffer = val.value_string.data_cstring
-    //                 bind.length = @ref(val.value_string.bytes)
-    //             }
-    //             println("TYPE: " + bind.buffer_type)
-    //             let name = val.name
-    //             // if isset(name) : println("NAME: " + name)
-    //             nameslot[0] = isset(name) ? name.data_cstring : null
-    //             // let cstr = nameslot[0]
-    //             // if isset(cstr) : println("CSTR: " + cstr)
-    //         }
-    //         let bind_data = this.bind_data
-    //         let bind_names = this.bind_names
-    //         if isset(bind_data) && isset(bind_names) {
-    //             println("BIND: " + this.bind_length)
-    //             mysql_bind_param(this.m, this.bind_length.to(u32), bind_data, bind_names)
-    //         }
-    //     }
-
-    //     //
-    //     while true {
-    //         let res = mysql_real_query_nonblocking(this.m, statement.data_cstring, statement.length)
-    //         println("RES: " + res)
-    //         match res {
-    //             ASYNC.COMPLETE => break
-    //             ASYNC.NOT_READY => {
-    //                 time:sleep_ns(1000)
-    //                 continue
-    //             }
-    //             ASYNC.ERROR => {
-    //                 let msg = mysql_error(this.m)
-    //                 throw error, msg.to(String)
-    //             }
-    //             default => throw error, "Unknown error"
-    //         }
-    //     }
-    //     let r = mysql_use_result(this.m)
-    //     this.reset_binds()
-
-    //     if !isset(r) : throw error
-    //     return r
-    // }
-}
+//         // Handle results
+//         let num_fields = mysql_num_fields(r)
+//         let lengths = mysql_fetch_lengths(r)
+//         let i = 0
+//         while i < num_fields {
+//             let data = row[i]
+//             let len = lengths[i]
+//             let str = String.make_from_ptr(data, len)
+//             // values.append(str)
+//             i++
+//         }
+//     }
+// }
