@@ -23,6 +23,7 @@ extern fn mysql_use_result(mysql: MySQL) ?MySQLResult;
 extern fn mysql_bind_param(mysql: MySQL, n_params: u32, bind: &[<MySQLBind>], name: &[?cstring]) bool;
 
 // Result
+extern fn mysql_free_result(result: MySQLResult);
 extern fn mysql_free_result_nonblocking(result: MySQLResult) ASYNC;
 extern fn mysql_fetch_row_nonblocking(result: MySQLResult, row: *?MySQLRow) ASYNC;
 extern fn mysql_num_fields(result: MySQLResult) u32;
@@ -37,3 +38,5 @@ extern fn mysql_stmt_execute(stmt: MySQLStatement) i32;
 extern fn mysql_stmt_error(stmt: MySQLStatement) cstring;
 extern fn mysql_stmt_bind_param(stmt: MySQLStatement, binds: &[<MySQLBind>]) cstring;
 extern fn mysql_stmt_result_metadata(stmt: MySQLStatement) ?MySQLResult;
+extern fn mysql_stmt_fetch(stmt: MySQLStatement) i32;
+extern fn mysql_stmt_affected_rows(result: MySQLResult) u64;

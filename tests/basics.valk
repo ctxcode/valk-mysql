@@ -11,12 +11,11 @@ test "Query" {
 
     let q = con.query("SELECT * FROM users WHERE id > ?") !!
     q.bindv(10)
-    q.select(fn(row: mysql:CurrentRow) {
-        println(">>>>>>>>>>>>>>>>>>")
-        println("RESULT")
-    }) ! {
+    let rows = q.select() ! {
         println("> Query failed: " + EMSG)
         assert(false)
         return
     }
+
+    assert(rows.length == 1)
 }

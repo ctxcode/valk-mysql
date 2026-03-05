@@ -1,41 +1,71 @@
 
 use valk:time
 
-class CurrentRow {
++ class Row {
     names: Array[String] (.{})
     values: Array[Value] (.{})
+
+    + fn copy() SELF {
+        return SELF {
+            names: this.names
+            values: this.values.copy()
+        }
+    }
 }
+
+type CurrentRow (Row)
 
 extend Statement {
 
-    + fn run(query: String) !error {
+    + fn run(query: String) uint !error {
         this.exec() !>
+        let r = mysql_stmt_result_metadata(this.stmt)
+        let rows = mysql_stmt_affected_rows(r)
+        mysql_free_result(r)
+        return rows
     }
-    + fn select(handler: fn(CurrentRow)()) !error {
+    + fn selectFirst() ?Row !error {
+        let row = Row{}
+        this.select_init(row) !>
+        let r = mysql_stmt_fetch(this.stmt)
+        this.fetch_row(r, row) ! {
+            if E == E.end : return null
+            throw error, EMSG
+        }
+        return row
+    }
+    + fn select() Array[Row] !error {
+        let row = Row{}
+        this.select_init(row) !>
+        let r = mysql_stmt_fetch(this.stmt)
+        let list = Array[Row]{}
+        while true {
+            this.fetch_row(r, row) ! {
+                if E == E.end : break
+                throw error, EMSG
+            }
+            list.append(row.copy())
+        }
+        return list
+    }
+    fn select_init(row: Row) !error {
         this.exec() !>
         let r = mysql_stmt_result_metadata(this.stmt)
         if !isset(r) : throw error, "No result"
 
-        let cur = CurrentRow{}
         let num_fields = mysql_num_fields(r)
         // Field names
         let fields = mysql_fetch_fields(r)
         let i = 0
         while i < num_fields {
             let field = &fields[0]
-            cur.names.append(field.name)
+            row.names.append(field.name)
             i++
         }
-
-        while true {
-            this.fetch_row(r, cur, handler) ! {
-                if E == E.end : break
-                throw error, EMSG
-            }
-        }
+        mysql_free_result(r)
     }
 
-    fn fetch_row(r: MySQLResult, cur: CurrentRow, handler: fn(CurrentRow)()) !error !end {
+    fn fetch_row(r: MySQLResult, cur: CurrentRow) !error !end {
 
         cur.values.clear()
         let row : ?MySQLRow = null
@@ -68,7 +98,6 @@ extend Statement {
             // values.append(str)
             i++
         }
-        handler(cur)
     }
 
     // + fn exec(statement: String) MySQLResult !error {
