@@ -7,6 +7,9 @@ fn connect(host: String, user: String, password: String, db: String, port: u32) 
 
     let con = Connection {
         con: sock
+        username: user
+        password: password
+        db: db
     }
     con.init() !>
 
@@ -15,6 +18,11 @@ fn connect(host: String, user: String, password: String, db: String, port: u32) 
 
 class Connection {
     con: net:Connection
+    //
+    username: String
+    password: String
+    db: String
+    //
     sendbuf: ByteBuffer (.new())
     packetbuf: ByteBuffer (.new())
     recvbuf: ByteBuffer (.new())
@@ -29,14 +37,13 @@ class Connection {
         let buf = this.recvbuf
         buf.clear()
         let len = this.con.recv(buf, 1024) ! throw handshake
-        println(len)
-        // println(buf)
         this.parse_handshake() !>
     }
 
-    fn parse_handshake() !unsupported {
+    fn parse_handshake() !unsupported !handshake {
         let data = this.recvbuf.data.@cast(ptr)
-        // let payload_len = read_int(data, 3)
+        let start = data
+        let payload_len = read_int(data, 3)
         data += 3
         // let seq_id = read_int(data, 1)
         data += 1
@@ -51,6 +58,7 @@ class Connection {
         this.con_id = read_int(data, 4)
         data += 4
         // auth-plugin-data-part-1
+        let auth1 = String.make_from_ptr(data, 8)
         data += 8
         // filler
         data += 1
@@ -83,6 +91,7 @@ class Connection {
         // Rest of the plugin provided data (scramble), $len=MAX(13, length of auth-plugin-data - 8)
         let auth_p2_len : uint = 13
         if auth_plugin_data_len - 8 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 8
+        let auth2 = String.make_from_ptr(data, auth_plugin_data_len)
         data += auth_p2_len
         //
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
@@ -95,7 +104,39 @@ class Connection {
         //////////////////////////////////////////////////
         //////////////////////////////////////////////////
 
+        // Verify data
+        let data_len : uint = data - start
+        if data_len != payload_len + 4 : throw handshake, "Client could not parse handshake data correctly"
 
+        if this.auth_plugin != "caching_sha2_password" : throw unsupported, "Client only supports: caching_sha2_password"
+
+        // Clear data
+        this.recvbuf.clear()
+
+        // SSL
+        if caps & CAP.CLIENT_SSL > 0 {
+            // Optional SSL connection (TODO)
+        }
+
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+
+        // Response
+        let buf = this.sendbuf
+        buf.clear()
+        buf.minimum_size(256)
+        let ccaps : u16 = 0
+        let max_packet_size : u32 = 0xFFFFFF
+        let ccharset : u8 = 45 // utf8mb4_general_ci
+        let username = this.username
+        let salt = auth1 + auth2
+
+        if caps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+        } else {
+        }
+
+        if caps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+        }
     }
 
     fn send() !send {
