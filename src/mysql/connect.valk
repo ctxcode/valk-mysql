@@ -32,7 +32,8 @@ class Connection {
     seqid: u8 (0)
     // Connection info
     con_id : uint (0)
-    caps: uint (0)
+    scaps: uint (0) // Server
+    caps: uint (0) // Client
     auth_plugin: String ("")
     auth_data: String ("")
     salt: String ("")
@@ -108,7 +109,7 @@ class Connection {
         // capability_flags_2
         let caps2 = read_int(data, 2)
         caps = (caps2 << 16) | caps
-        this.caps = caps
+        this.scaps = caps
         data += 2
         //
         let auth_plugin_data_len : uint = 0
@@ -296,7 +297,9 @@ class Connection {
 
     fn recv() !recv {
         let buf = this.recvbuf
-        let recv_bytes = this.con.recv(buf, 1024) ! throw recv
+        let recv_bytes : uint = buf.length
+        if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw recv
+        if recv_bytes < 4 : throw recv, "Invalid MySQL server response (missing packet bytes)"
         //
         let data = buf.data.@cast(ptr)
         let payload_len : uint = read_int(data, 3)

@@ -7,9 +7,19 @@ extend Connection {
         buf.append_byte(0x03)
         buf.append_str(q)
         // Send
+        this.seqid = 0
         this.send() ! throw error, EMSG
         this.recv() ! throw error, EMSG
         this.check_error() ! throw error, EMSG
+        //
+        let data : ptr = this.respbuf.data
+        let colcount, bytes = read_int_enc(data)
+        data += bytes
+        println("COL COUNT: " + colcount)
+        //
+        this.recv() !>
+        this.check_error() !>
+        println(this.respbuf)
     }
 }
 

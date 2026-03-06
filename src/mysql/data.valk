@@ -53,4 +53,25 @@ fn read_int(from: ptr, bytes: u8) uint {
     }
     return v
 }
+fn read_int_enc(from: ptr) (uint, uint) {
+    let v = read_int(from, 1)
+    println("VAL: " + v)
+    if v <= 250 {
+        return (v, 1)
+    }
+    if v == 0xFC {
+        from += 1
+        v = read_int(from, 2)
+        return (v, 3)
+    }
+    if v == 0xFD {
+        from += 1
+        v = read_int(from, 3)
+        return (v, 4)
+    }
+
+    from += 1
+    v = read_int(from, 8)
+    return (v, 9)
+}
 
