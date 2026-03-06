@@ -1,4 +1,17 @@
 
+use valk:json
+
+extend Connection {
+    binds: Array[?json:Value] (.{})
+    bind_count: uint (0)
+    bind_data: ByteBuffer (.new())
+
+    fn bind(name: String, value: $T) {
+    }
+    fn bindv(value: $T) {
+    }
+}
+
 // use valk:gc
 // use valk:json
 

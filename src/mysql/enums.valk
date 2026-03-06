@@ -42,3 +42,13 @@ enum FIELD_TYPE : i32 {
     STRING (254)
     GEOMETRY (255)
 }
+
+enum CURSOR {
+  NONE (0)
+  READ_ONLY (1)
+  FOR_UPDATE (2)
+  SCROLLABLE (4)
+  // On when the client will send the parameter count
+  // even for 0 parameters.
+  PARAMETER_COUNT_AVAILABLE (8)
+}
