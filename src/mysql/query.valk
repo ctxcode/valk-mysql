@@ -1,5 +1,7 @@
 
 extend Connection {
+    fetching: bool (false)
+    col_count: uint (0)
 
     fn query(q: String) !error {
         println("COMMAND")
@@ -14,12 +16,51 @@ extend Connection {
         //
         let data : ptr = this.respbuf.data
         let colcount, bytes = read_int_enc(data)
+        this.col_count = colcount
         data += bytes
-        println("COL COUNT: " + colcount)
-        //
-        this.recv() !>
-        this.check_error() !>
-        println(this.respbuf)
+
+        // Read columns
+        let x = colcount
+        while x-- > 0 {
+            println("GET COL")
+            this.recv() ! throw error
+            this.check_error() ! throw error
+        }
+
+        println("FETCH DATA")
+        this.fetching = true
+        let row = Array[String]{}
+        while true {
+            this.fetch_to(row) ! {
+                if E == E.end : break
+                throw error, EMSG
+            }
+            println("ROW: " + row.join(" | "))
+        }
+    }
+
+    fn fetch_to(row: Array[String]) !error !end {
+        row.clear()
+        if !this.fetching : throw end
+        // Rows
+        this.recv() ! throw error
+        this.check_error() ! throw error
+        let data : ptr = this.respbuf.data
+        let header = read_int(data, 1)
+        if header == 0xFE {
+            println("EOF PACKET")
+            this.fetching = false
+            throw end
+        }
+
+        let x = this.col_count
+        while x-- > 0 {
+            let len, bytes = read_int_enc(data)
+            data += bytes
+            let str = String.make_from_ptr(data, len)
+            data += len
+            row.append(str)
+        }
     }
 }
 
