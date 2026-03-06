@@ -1,5 +1,7 @@
 
 use valk:net
+use valk:crypto
+use valk:mem
 
 fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !connect !handshake {
 
@@ -26,27 +28,25 @@ class Connection {
     sendbuf: ByteBuffer (.new())
     packetbuf: ByteBuffer (.new())
     recvbuf: ByteBuffer (.new())
+    respbuf: ByteBuffer (.new())
     seqid: u8 (0)
     // Connection info
     con_id : uint (0)
     caps: uint (0)
     auth_plugin: String ("")
+    authp1: String ("")
+    authp2: String ("")
     //
 
     fn init() !handshake !unsupported {
-        let buf = this.recvbuf
-        buf.clear()
-        let len = this.con.recv(buf, 1024) ! throw handshake
-        this.parse_handshake() !>
+        this.handshake_init() !>
+        this.handshake_response() !>
     }
 
-    fn parse_handshake() !unsupported !handshake {
-        let data = this.recvbuf.data.@cast(ptr)
-        let start = data
-        let payload_len = read_int(data, 3)
-        data += 3
-        // let seq_id = read_int(data, 1)
-        data += 1
+    fn handshake_init() !unsupported !handshake {
+        this.recv() ! throw handshake, EMSG
+        let data = this.respbuf.data.@cast(ptr)
+        // let start = data
         //
         let proto = read_int(data, 1) // Always 10
         if proto != 10 : throw unsupported, "Unsupported protocol version"
@@ -58,7 +58,7 @@ class Connection {
         this.con_id = read_int(data, 4)
         data += 4
         // auth-plugin-data-part-1
-        let auth1 = String.make_from_ptr(data, 8)
+        this.authp1 = String.make_from_ptr(data, 8)
         data += 8
         // filler
         data += 1
@@ -91,7 +91,7 @@ class Connection {
         // Rest of the plugin provided data (scramble), $len=MAX(13, length of auth-plugin-data - 8)
         let auth_p2_len : uint = 13
         if auth_plugin_data_len - 8 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 8
-        let auth2 = String.make_from_ptr(data, auth_plugin_data_len)
+        this.authp2 = String.make_from_ptr(data, auth_plugin_data_len)
         data += auth_p2_len
         //
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
@@ -105,38 +105,147 @@ class Connection {
         //////////////////////////////////////////////////
 
         // Verify data
-        let data_len : uint = data - start
-        if data_len != payload_len + 4 : throw handshake, "Client could not parse handshake data correctly"
+        // let data_len : uint = data - start
+        // if data_len != payload_len + 4 : throw handshake, "Client could not parse handshake data correctly"
 
         if this.auth_plugin != "caching_sha2_password" : throw unsupported, "Client only supports: caching_sha2_password"
-
-        // Clear data
-        this.recvbuf.clear()
 
         // SSL
         if caps & CAP.CLIENT_SSL > 0 {
             // Optional SSL connection (TODO)
         }
+    }
 
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
-
+    fn handshake_response() !handshake {
         // Response
-        let buf = this.sendbuf
-        buf.clear()
-        buf.minimum_size(256)
         let ccaps : u16 = 0
-        let max_packet_size : u32 = 0xFFFFFF
         let ccharset : u8 = 45 // utf8mb4_general_ci
         let username = this.username
-        let salt = auth1 + auth2
+        let db = this.db
+        let salt = this.authp1 + this.authp2
+        let client_plugin_name = "caching_sha2_password"
 
-        if caps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+        // Auth response
+        let hash = crypto:Sha256{}
+        hash.add_string_data(this.password)
+        let hash1 = hash.final()
+        hash.reset()
+        hash.add_hash_data(hash1)
+        let hash2 = hash.final()
+        hash.reset()
+        hash.add_hash_data(hash2)
+        hash.add_string_data(salt)
+        let hash3 = hash.final()
+        let auth_response : [u8 x 32] = { 0... }
+        let i : uint = 0
+        while i < 32 {
+            auth_response[i] = hash1[i] ^ hash3[i]
+            i++
+        }
+
+        // Write resp
+        let sbuf = this.sendbuf
+        sbuf.minimum_free_space(username.length + db.length + client_plugin_name.length + 1024)
+        let sdata = sbuf.data.@cast(ptr)
+        let send_start = sdata
+        // Caps
+        write_int(sdata, ccaps, 4)
+        sdata += 4
+        // Max packet size
+        write_int(sdata, 0xFFFFFF, 4)
+        sdata += 4
+        // Charset
+        write_int(sdata, ccharset, 1)
+        sdata += 1
+        // Filler
+        sdata += 23
+        // Username
+        mem:copy(sdata, username.data, username.length)
+        @ptrv(sdata, u8, username.length) = 0
+        sdata += username.length + 1
+
+        if this.caps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+            sdata += write_int_encoded(sdata, 32)
+            mem:copy(sdata, auth_response, 32)
+            sdata += 32
         } else {
+            sdata += write_int_encoded(sdata, 32)
+            mem:copy(sdata, auth_response, 32)
+            sdata += 32
         }
 
-        if caps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+        if this.caps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+            // DB
+            mem:copy(sdata, db.data, db.length)
+            @ptrv(sdata, u8, db.length) = 0
+            sdata += db.length + 1
         }
+
+        if this.caps & CAP.CLIENT_CONNECT_ATTRS > 0 {
+            sdata += write_int_encoded(sdata, 0)
+        }
+        if this.caps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+            write_int(sdata, 0, 1)
+            sdata += 1
+        }
+
+        // Send
+        let len : uint = sdata - send_start
+        sbuf.length += len
+        this.send() ! throw handshake
+
+        // Resp
+        let sid = this.recv() ! throw handshake, EMSG
+        this.check_error() ! throw handshake, EMSG
+        // this.con.recv(this.recvbuf, 1024) ! throw handshake
+        // println("LEN: %{ this.recvbuf.length }")
+    }
+
+    fn check_error() !error {
+        let data = this.respbuf.data.@cast(ptr)
+        let start = data
+        let header = read_int(data, 1)
+        if header != 0xFF : return
+        data += 1
+        // let code = read_int(data, 2)
+        data += 2
+        //
+        if this.caps & CAP.CLIENT_PROTOCOL_41 > 0 {
+            // let sql_state_marker = @ptrv(data, u8)
+            data += 1
+            // sql_state
+            data += 5
+        }
+
+        let msglen = this.respbuf.length - (data - start)
+        let msg : String = String.make_from_ptr(data, msglen)
+
+        throw error, "MySQL Error: " + msg
+    }
+
+    fn recv() u8 !recv {
+        let buf = this.recvbuf
+        let recv_bytes = this.con.recv(buf, 1024) ! throw recv
+        //
+        let data = buf.data.@cast(ptr)
+        let payload_len : uint = read_int(data, 3)
+        data += 3
+        let seq_id = read_int(data, 1).to(u8)
+        data += 1
+        // Read more if needed
+        while recv_bytes < (payload_len + 4) {
+            recv_bytes += this.con.recv(buf, 1024) ! throw recv
+        }
+        //
+        this.respbuf.clear()
+        this.respbuf.append_from_ptr(buf.data.@offset(4), payload_len)
+        buf.clear_until(payload_len + 4)
+        //
+        println("RECV: " + this.respbuf.length)
+        this.respbuf.data.@cast(ptr).print_bytes(this.respbuf.length)
+        println("------")
+        //
+        return seq_id
     }
 
     fn send() !send {
@@ -151,7 +260,12 @@ class Connection {
         write_int1(pb.data.@offset(pb.length), id)
         pb.length += 1
         pb.append(sb)
-
+        sb.clear() // Clear send data
+        //
+        println("SEND: " + pb.length)
+        pb.data.@cast(ptr).print_bytes(pb.length)
+        println("------")
+        //
         this.con.send_buffer(pb, 0, true) ! throw send
     }
 }
