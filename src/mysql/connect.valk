@@ -118,7 +118,7 @@ class Connection {
 
     fn handshake_response() !handshake {
         // Response
-        let ccaps : u16 = 0
+        let ccaps : u16 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_LONG_PASSWORD | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB
         let ccharset : u8 = 45 // utf8mb4_general_ci
         let username = this.username
         let db = this.db
@@ -195,7 +195,7 @@ class Connection {
         this.send() ! throw handshake
 
         // Resp
-        let sid = this.recv() ! throw handshake, EMSG
+        this.recv() ! throw handshake, EMSG
         this.check_error() ! throw handshake, EMSG
         // this.con.recv(this.recvbuf, 1024) ! throw handshake
         // println("LEN: %{ this.recvbuf.length }")
@@ -223,14 +223,14 @@ class Connection {
         throw error, "MySQL Error: " + msg
     }
 
-    fn recv() u8 !recv {
+    fn recv() !recv {
         let buf = this.recvbuf
         let recv_bytes = this.con.recv(buf, 1024) ! throw recv
         //
         let data = buf.data.@cast(ptr)
         let payload_len : uint = read_int(data, 3)
         data += 3
-        let seq_id = read_int(data, 1).to(u8)
+        this.seqid = read_int(data, 1).to(u8) + 1
         data += 1
         // Read more if needed
         while recv_bytes < (payload_len + 4) {
@@ -241,11 +241,9 @@ class Connection {
         this.respbuf.append_from_ptr(buf.data.@offset(4), payload_len)
         buf.clear_until(payload_len + 4)
         //
-        println("RECV: " + this.respbuf.length)
+        println("RECV: " + (this.seqid - 1))
         this.respbuf.data.@cast(ptr).print_bytes(this.respbuf.length)
         println("------")
-        //
-        return seq_id
     }
 
     fn send() !send {
@@ -262,7 +260,7 @@ class Connection {
         pb.append(sb)
         sb.clear() // Clear send data
         //
-        println("SEND: " + pb.length)
+        println("SEND: " + id)
         pb.data.@cast(ptr).print_bytes(pb.length)
         println("------")
         //
