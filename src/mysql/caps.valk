@@ -1,5 +1,5 @@
 
-enum CAP : u16 {
+enum CAP : u32 {
  	// Use the improved version of Old Password Authentication.
     CLIENT_LONG_PASSWORD (1)
  	// Send found rows instead of affected rows in EOF_Packet.

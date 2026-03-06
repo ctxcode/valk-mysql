@@ -118,12 +118,12 @@ class Connection {
 
     fn handshake_response() !handshake {
         // Response
-        let ccaps : u16 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_LONG_PASSWORD | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB
+        let ccaps : u32 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
         let ccharset : u8 = 45 // utf8mb4_general_ci
         let username = this.username
         let db = this.db
         let salt = this.authp1 + this.authp2
-        let client_plugin_name = "caching_sha2_password"
+        let auth_plugin_name = "caching_sha2_password"
 
         // Auth response
         let hash = crypto:Sha256{}
@@ -145,7 +145,7 @@ class Connection {
 
         // Write resp
         let sbuf = this.sendbuf
-        sbuf.minimum_free_space(username.length + db.length + client_plugin_name.length + 1024)
+        sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + 1024)
         let sdata = sbuf.data.@cast(ptr)
         let send_start = sdata
         // Caps
@@ -157,14 +157,15 @@ class Connection {
         // Charset
         write_int(sdata, ccharset, 1)
         sdata += 1
-        // Filler
+        // Filler (0x00 bytes)
+        mem:clear(sdata, 23)
         sdata += 23
         // Username
         mem:copy(sdata, username.data, username.length)
         @ptrv(sdata, u8, username.length) = 0
         sdata += username.length + 1
 
-        if this.caps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+        if ccaps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
             sdata += write_int_encoded(sdata, 32)
             mem:copy(sdata, auth_response, 32)
             sdata += 32
@@ -174,17 +175,18 @@ class Connection {
             sdata += 32
         }
 
-        if this.caps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
-            // DB
-            mem:copy(sdata, db.data, db.length)
-            @ptrv(sdata, u8, db.length) = 0
+        if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+            mem:copy(sdata, db.data, db.length + 1)
             sdata += db.length + 1
         }
-
-        if this.caps & CAP.CLIENT_CONNECT_ATTRS > 0 {
+        if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
+            mem:copy(sdata, auth_plugin_name.data, auth_plugin_name.length + 1)
+            sdata += db.length + 1
+        }
+        if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
             sdata += write_int_encoded(sdata, 0)
         }
-        if this.caps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
+        if ccaps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
             write_int(sdata, 0, 1)
             sdata += 1
         }
@@ -197,8 +199,6 @@ class Connection {
         // Resp
         this.recv() ! throw handshake, EMSG
         this.check_error() ! throw handshake, EMSG
-        // this.con.recv(this.recvbuf, 1024) ! throw handshake
-        // println("LEN: %{ this.recvbuf.length }")
     }
 
     fn check_error() !error {
