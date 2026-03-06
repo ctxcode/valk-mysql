@@ -8,11 +8,17 @@ test "Query" {
         return
     }
 
-    con.query("SELECT * FROM users") ! {
+    con.run("SELECT * FROM users") ! {
         println("Query error: " + EMSG)
         assert(false)
         return
     }
+
+    let row : Array[?String] = .{}
+    while con.fetch_row(row) ! { assert(false) return } {
+        println(row.join(" | "))
+    }
+
     // con.connect() ! {
     //     println("> Connection failed: " + EMSG)
     //     assert(false)

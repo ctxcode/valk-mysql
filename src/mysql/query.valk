@@ -1,10 +1,14 @@
 
 extend Connection {
-    fetching: bool (false)
+    columns: Array[String] (.{})
     col_count: uint (0)
+    statement_id: uint (0)
+    fetching: bool (false)
+    is_statement: bool (false)
 
-    fn query(q: String) !error {
-        println("COMMAND")
+    + fn run(q: String) !error {
+        if this.fetching : this.flush_result() !>
+        //
         let buf = this.sendbuf
         buf.append_byte(0x03)
         buf.append_str(q)
@@ -20,148 +24,57 @@ extend Connection {
         data += bytes
 
         // Read columns
+        let cols = this.columns
+        cols.clear()
         let x = colcount
         while x-- > 0 {
-            println("GET COL")
             this.recv() ! throw error
             this.check_error() ! throw error
         }
 
-        println("FETCH DATA")
         this.fetching = true
-        let row = Array[String]{}
+    }
+
+    fn flush_result() !error {
+        if !this.fetching : return
         while true {
-            this.fetch_to(row) ! {
-                if E == E.end : break
-                throw error, EMSG
+            this.recv() ! throw error
+            this.check_error() ! throw error
+            let header = read_int(this.respbuf.data, 1)
+            if header == 0xFE {
+                this.fetching = false
+                break
             }
-            println("ROW: " + row.join(" | "))
         }
     }
 
-    fn fetch_to(row: Array[String]) !error !end {
+    + fn fetch_row(row: Array[?String]) bool !error {
         row.clear()
-        if !this.fetching : throw end
+        if !this.fetching : return false
         // Rows
         this.recv() ! throw error
         this.check_error() ! throw error
         let data : ptr = this.respbuf.data
         let header = read_int(data, 1)
         if header == 0xFE {
-            println("EOF PACKET")
             this.fetching = false
-            throw end
+            return false
         }
 
         let x = this.col_count
         while x-- > 0 {
             let len, bytes = read_int_enc(data)
             data += bytes
+            // Is null check
+            if len == 0xFB {
+                row.append(null)
+                continue
+            }
+            // String data
             let str = String.make_from_ptr(data, len)
             data += len
             row.append(str)
         }
+        return true
     }
 }
-
-// use valk:time
-
-// + class Row {
-//     names: Array[String] (.{})
-//     values: Array[Value] (.{})
-
-//     + fn copy() SELF {
-//         return SELF {
-//             names: this.names
-//             values: this.values.copy()
-//         }
-//     }
-// }
-
-// type CurrentRow (Row)
-
-// extend Statement {
-
-//     + fn run(query: String) uint !error {
-//         this.exec() !>
-//         let r = mysql_stmt_result_metadata(this.stmt)
-//         let rows = mysql_stmt_affected_rows(r)
-//         mysql_free_result(r)
-//         return rows
-//     }
-//     + fn selectFirst() ?Row !error {
-//         let row = Row{}
-//         this.select_init(row) !>
-//         let r = mysql_stmt_fetch(this.stmt)
-//         this.fetch_row(r, row) ! {
-//             if E == E.end : return null
-//             throw error, EMSG
-//         }
-//         return row
-//     }
-//     + fn select() Array[Row] !error {
-//         let row = Row{}
-//         this.select_init(row) !>
-//         let r = mysql_stmt_fetch(this.stmt)
-//         let list = Array[Row]{}
-//         while true {
-//             this.fetch_row(r, row) ! {
-//                 if E == E.end : break
-//                 throw error, EMSG
-//             }
-//             list.append(row.copy())
-//         }
-//         return list
-//     }
-//     fn select_init(row: Row) !error {
-//         this.exec() !>
-//         let r = mysql_stmt_result_metadata(this.stmt)
-//         if !isset(r) : throw error, "No result"
-
-//         let num_fields = mysql_num_fields(r)
-//         // Field names
-//         let fields = mysql_fetch_fields(r)
-//         let i = 0
-//         while i < num_fields {
-//             let field = &fields[0]
-//             row.names.append(field.name)
-//             i++
-//         }
-//         mysql_free_result(r)
-//     }
-
-//     fn fetch_row(r: MySQLResult, cur: CurrentRow) !error !end {
-
-//         cur.values.clear()
-//         let row : ?MySQLRow = null
-//         while true {
-//             let res = mysql_fetch_row_nonblocking(r, @stableRef(row))
-//             println(res)
-//             match res {
-//                 ASYNC.COMPLETE => break
-//                 ASYNC.NOT_READY => {
-//                     time:sleep_ns(1000)
-//                     continue
-//                 }
-//                 ASYNC.ERROR => {
-//                     throw error, this.get_error()
-//                 }
-//                 default => break
-//             }
-//         }
-//         println("R")
-//         if !isset(row) : throw end
-
-//         // Handle results
-//         let num_fields = mysql_num_fields(r)
-//         let lengths = mysql_fetch_lengths(r)
-//         let i = 0
-//         while i < num_fields {
-//             let data = row[i]
-//             let len = lengths[i]
-//             let str = String.make_from_ptr(data, len)
-//             // values.append(str)
-//             i++
-//         }
-//     }
-// }

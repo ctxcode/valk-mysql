@@ -58,6 +58,9 @@ fn read_int_enc(from: ptr) (uint, uint) {
     if v <= 250 {
         return (v, 1)
     }
+    if v == 0xFB {
+        return (v, 1)
+    }
     if v == 0xFC {
         from += 1
         v = read_int(from, 2)
