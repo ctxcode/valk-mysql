@@ -1,4 +1,18 @@
 
+extend Connection {
+
+    fn query(q: String) !error {
+        println("COMMAND")
+        let buf = this.sendbuf
+        buf.append_byte(0x03)
+        buf.append_str(q)
+        // Send
+        this.send() ! throw error, EMSG
+        this.recv() ! throw error, EMSG
+        this.check_error() ! throw error, EMSG
+    }
+}
+
 // use valk:time
 
 // + class Row {

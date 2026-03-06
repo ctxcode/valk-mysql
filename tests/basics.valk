@@ -2,9 +2,14 @@
 use mysql
 
 test "Query" {
-    let con = mysql:connect("127.0.0.1", "root", "root", "valk", 3306) ! {
-        println(EMSG)
-        println("MySQL connection failed")
+    let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3306) ! {
+        println("Connection failed: " + EMSG)
+        assert(false)
+        return
+    }
+
+    con.query("SELECT * FROM users") ! {
+        println("Query error: " + EMSG)
         assert(false)
         return
     }
