@@ -81,6 +81,7 @@ extend Connection {
             data += 4
             // type
             let type = read_int(data, 1)
+            println("TYPE: " + type)
             this.column_types.append(type)
             data += 1
             // flags
@@ -287,31 +288,46 @@ extend Connection {
 
     fn fetch_binary_resultset(row: Array[?String]) bool !error {
         println("READ BINARY ROW")
+        row.clear()
         let data : ptr = this.respbuf.data
         data += 1 // skip 0x00 header byte
+        let null_data = data
         let col_count = this.col_count
         let null_bytec = (col_count + 7) / 8
         data += null_bytec
         //
         let i : uint = 0
         while i < col_count {
-            let byte_pos = (i - 1) / 8
-            let bit_pos = ((i - 1) % 8).to(u8)
-            let byte = @ptrv(data, u8, byte_pos)
-            let is_null = (byte & (1 << bit_pos)) > 0
+            let byte_pos = i / 8
+            let bit_pos = (i % 8).to(u8)
+            let type = this.column_types.get(i) ! throw error, "Bug: Missing column type"
             i++
-
-            let len, bytes = read_int_enc(data)
-            data += bytes
-            // Is null check
-            if len == 0xFB {
+            // Check if is null
+            let byte = @ptrv(null_data, u8, byte_pos)
+            let is_null = (byte & (1 << bit_pos)) > 0
+            if is_null {
                 row.append(null)
                 continue
             }
-            // String data
-            let str = String.make_from_ptr(data, len)
-            data += len
-            row.append(str)
+            //
+
+            if type == FIELD_TYPE.LONG {
+                let v = @ptrv(data, i32, 0)
+                row.append(v)
+                data += 4
+            } else if type == FIELD_TYPE.LONGLONG {
+                let v = @ptrv(data, i64, 0)
+                row.append(v)
+                data += 8
+            } else if type == FIELD_TYPE.VAR_STRING {
+                let strlen, bytes = read_int_enc(data)
+                data += bytes
+                let str = String.make_from_ptr(data, strlen)
+                data += strlen
+                row.append(str)
+            } else {
+                throw error, "Bug: Unhandled mysql type: " + type
+            }
         }
         return true
     }
