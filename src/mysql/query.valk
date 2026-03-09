@@ -1,15 +1,22 @@
 
+use valk:mem
+
 extend Connection {
-    columns: Array[String] (.{})
+    column_types: Array[uint] (.{})
+    column_names: Array[String] (.{})
     col_count: uint (0)
     statement_id: uint (0)
+    prep_column_count: uint (0)
+    prep_param_count: uint (0)
     fetching: bool (false)
     is_statement: bool (false)
 
     + fn run(q: String) !error {
         if this.fetching : this.flush_result() !>
         //
-        if this.bind_count > 0 {
+        this.is_statement = this.bind_count > 0
+        //
+        if this.is_statement {
             this.send_prep_query(q) !>
         } else {
             this.send_com_query(q) !>
@@ -21,15 +28,68 @@ extend Connection {
         data += bytes
 
         // Read columns
-        let cols = this.columns
-        cols.clear()
-        let x = colcount
-        while x-- > 0 {
-            this.recv() ! throw error
-            this.check_error() ! throw error
-        }
+        this.read_column_data() !>
 
         this.fetching = true
+    }
+
+    fn read_column_data() !error {
+        let names = this.column_names
+        let types = this.column_types
+        names.clear()
+        types.clear()
+        //
+        let i : uint = 0
+        let col_count = this.col_count
+        while i++ < col_count {
+            this.recv() ! throw error
+            this.check_error() ! throw error
+            let data : ptr = this.respbuf.data
+            // catalog (def)
+            let strlen, bytes = read_int_enc(data)
+            data += bytes
+            data += strlen
+            // schema
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            data += strlen
+            // table
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            data += strlen
+            // org_table
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            data += strlen
+            // col name
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            let col_name = String.make_from_ptr(data, strlen)
+            this.column_names.append(col_name)
+            data += strlen
+            // col org_name
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            data += strlen
+            // length of fixed length fields
+            (strlen, bytes) = read_int_enc(data)
+            data += bytes
+            // charset
+            // let charset = read_int(data, 2)
+            data += 2
+            // column_length
+            data += 4
+            // type
+            let type = read_int(data, 1)
+            this.column_types.append(type)
+            data += 1
+            // flags
+            data += 2
+            // decimals
+            data += 1
+            // reserved
+            data += 2
+        }
     }
 
     fn send_com_query(q: String) !error {
@@ -43,11 +103,65 @@ extend Connection {
         this.check_error() ! throw error, EMSG
     }
 
+    fn prepare(q: String) !error {
+        let buf = this.sendbuf
+        // COM_STMT_PREPARE
+        this.seqid = 0
+        buf.append_byte(0x16)
+        // EofString
+        buf.append_str(q)
+        // Send
+        this.send() !>
+        // Read response
+        this.recv() !>
+        this.check_error() !>
+        //
+        let data : ptr = this.respbuf.data
+        // let header = read_int(data, 1)
+        data += 1
+        // Statement ID
+        this.statement_id = read_int(data, 4)
+        data += 4
+        // Col count
+        this.prep_column_count = read_int(data, 2)
+        data += 2
+        // Param count
+        this.prep_param_count = read_int(data, 2)
+        data += 2
+        // Filler
+        data += 1
+        //
+
+
+        // Meta data packets
+        // if num_params > 0 and CLIENT_OPTIONAL_RESULTSET_METADATA is not set or if medatdata_follows is RESULTSET_METADATA_FULL num_params packets will follow. Then a EOF_Packet will be transmitted, provided that CLIENT_DEPRECATE_EOF is not set.
+        if this.prep_param_count > 0 {
+            let x = this.prep_param_count
+            while x-- > 0 {
+                this.recv() !>
+                this.check_error() !>
+            }
+        }
+
+        // if num_columns > 0 and CLIENT_OPTIONAL_RESULTSET_METADATA is not set or if medatdata_follows is RESULTSET_METADATA_FULL num_columns packets will follow. Then a EOF_Packet will be transmitted, provided that CLIENT_DEPRECATE_EOF is not set.
+        if this.prep_column_count > 0 {
+            let x = this.prep_column_count
+            while x-- > 0 {
+                this.recv() !>
+                this.check_error() !>
+            }
+        }
+    }
+
     fn send_prep_query(q: String) !error {
+        // Prepare
+        this.prepare(q) !>
+        // Execute
         let data : ptr = this.sendbuf.data
         let start = data
-        let param_count = this.bind_count
+        let param_count = this.prep_param_count
         // COM_STMT_EXECUTE
+        this.seqid = 0
         write_int(data, 0x17, 1)
         data += 1
         // Statement_id
@@ -62,6 +176,8 @@ extend Connection {
         // param_count
         // data += write_int_encoded(data, param_count)
         // Null bitmap
+        let null_bytec = (param_count + 7) / 8
+        mem:clear(data, null_bytec)
         let binds = this.binds
         let i : uint = 0
         while i < param_count {
@@ -73,7 +189,6 @@ extend Connection {
             byte = byte | (1 << bit_pos)
             @ptrv(data, u8, byte_pos) = byte
         }
-        let null_bytec = (param_count + 7) / 8
         data += null_bytec
         // new_params_bind_flag
         write_int(data, 1, 1)
@@ -100,18 +215,19 @@ extend Connection {
             } else if bind.is_int() {
                 write_int(buf.data.@offset(buf.length), FIELD_TYPE.LONGLONG, 2)
                 buf.length += 2
-                buf.append_uint(bind.int_value)
+                @ptrv(buf.data.@offset(buf.length), int) = bind.int_value
+                buf.length += 8
             } else if bind.is_float() {
                 write_int(buf.data.@offset(buf.length), FIELD_TYPE.DOUBLE, 2)
                 buf.length += 2
-                buf.append_f64(bind.float_value)
+                @ptrv(buf.data.@offset(buf.length), f64) = bind.float_value
+                buf.length += 8
             } else {
                 throw error, "Bug: Unhandled bind value type"
             }
         }
 
         // Send
-        this.seqid = 0
         this.send() ! throw error, EMSG
         this.recv() ! throw error, EMSG
         this.check_error() ! throw error, EMSG
@@ -132,12 +248,18 @@ extend Connection {
 
     fn stop_fetch() {
         this.fetching = false
+        this.column_names.clear()
+        this.column_types.clear()
         // Close statement
         if this.is_statement {
             this.is_statement = false
             let data : ptr = this.sendbuf.data
+            let start = data
             write_int(data, 0x19, 1)
+            data += 1
             write_int(data, this.statement_id, 4)
+            data += 4
+            this.sendbuf.length += data - start
             this.send() _
         }
         // Clear binds
@@ -146,7 +268,8 @@ extend Connection {
     + fn fetch_row(row: Array[?String]) bool !error {
         row.clear()
         if !this.fetching : return false
-        // Rows
+
+        // Next result
         this.recv() ! throw error
         this.check_error() ! throw error
         let data : ptr = this.respbuf.data
@@ -156,6 +279,46 @@ extend Connection {
             return false
         }
 
+        if this.is_statement {
+            return this.fetch_binary_resultset(row) !>
+        }
+        return this.fetch_text_resultset(row) !>
+    }
+
+    fn fetch_binary_resultset(row: Array[?String]) bool !error {
+        println("READ BINARY ROW")
+        let data : ptr = this.respbuf.data
+        data += 1 // skip 0x00 header byte
+        let col_count = this.col_count
+        let null_bytec = (col_count + 7) / 8
+        data += null_bytec
+        //
+        let i : uint = 0
+        while i < col_count {
+            let byte_pos = (i - 1) / 8
+            let bit_pos = ((i - 1) % 8).to(u8)
+            let byte = @ptrv(data, u8, byte_pos)
+            let is_null = (byte & (1 << bit_pos)) > 0
+            i++
+
+            let len, bytes = read_int_enc(data)
+            data += bytes
+            // Is null check
+            if len == 0xFB {
+                row.append(null)
+                continue
+            }
+            // String data
+            let str = String.make_from_ptr(data, len)
+            data += len
+            row.append(str)
+        }
+        return true
+    }
+
+    fn fetch_text_resultset(row: Array[?String]) bool !error {
+        let data : ptr = this.respbuf.data
+        //
         let x = this.col_count
         while x-- > 0 {
             let len, bytes = read_int_enc(data)

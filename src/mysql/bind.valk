@@ -9,6 +9,9 @@ extend Connection {
     fn bind(name: String, value: $T) {
     }
     fn bindv(value: $T) {
+        let v = json:value(value)
+        this.binds.append(v)
+        this.bind_count++
     }
 }
 

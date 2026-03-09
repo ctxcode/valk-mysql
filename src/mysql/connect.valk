@@ -210,6 +210,8 @@ class Connection {
     fn handshake_response() !handshake {
         // Response
         let ccaps : u32 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_LONG_PASSWORD
+        this.caps = ccaps
+        //
         let ccharset : u8 = 45 // utf8mb4_general_ci
         let username = this.username
         let db = this.db

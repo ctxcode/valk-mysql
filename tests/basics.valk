@@ -8,7 +8,8 @@ test "Query" {
         return
     }
 
-    con.run("SELECT * FROM users") ! {
+    con.bindv(1)
+    con.run("SELECT * FROM users WHERE id = ?") ! {
         println("Query error: " + EMSG)
         assert(false)
         return
