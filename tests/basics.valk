@@ -2,7 +2,7 @@
 use mysql
 
 test "Query" {
-    let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3306) ! {
+    let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3307) ! {
         println("Connection failed: " + EMSG)
         assert(false)
         return
