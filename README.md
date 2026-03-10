@@ -1,4 +1,15 @@
 
+# valk-mysql
+
+A package to connect/query mysql databases
+
+## Install
+
+```
+vman install github.com/ctxcode/valk-mysql
+```
+
+## Example
 
 ```rust
 // Init
