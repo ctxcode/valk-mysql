@@ -13,7 +13,7 @@ vman install github.com/ctxcode/valk-mysql
 
 ```rust
 // Init
-let db = mysq:connect("127.0.0.1", "user", "password", "dbname", 3306)
+let db = mysql:connect("127.0.0.1", "user", "password", "dbname", 3306)
 
 // Run query + parameters
 db.bind("name", "test")

@@ -1,5 +1,7 @@
 {
-    "namespaces": {
-        "mysql": "../src/mysql"
+    "dependencies": {
+        "mysql": {
+            "src": "../"
+        }
     }
 }

@@ -1,1 +1,9 @@
-{}
+{
+    "dependencies": {
+        "mysql": {
+            "src": "github.com/ctxcode/valk-mysql",
+            "version": "0.0.1",
+            "update": "0.0.x"
+        }
+    }
+}

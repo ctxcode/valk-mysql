@@ -8,11 +8,11 @@ extend Connection {
     bind_data: ByteBuffer (.new())
     final_binds: Array[?json:Value] (.{})
 
-    fn bind(name: String, value: $T) {
+    + fn bind(name: String, value: $T) {
         let v = json:value(value)
         this.named_binds.set(name, v)
     }
-    fn bindv(value: $T) {
+    + fn bindv(value: $T) {
         let v = json:value(value)
         this.binds.append(v)
     }

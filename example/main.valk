@@ -1,8 +1,8 @@
 
-use mysql
+use mysql:mysql
 
 fn main() {
-    let con = connect() ! { assert(false) return }
+    let con = mysql:connect("127.0.0.1", "root", "root", "valk", 3306)
 
     // Setup table
     con.run("CREATE TABLE IF NOT EXISTS `users` (

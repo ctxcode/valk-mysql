@@ -3,7 +3,7 @@ use valk:net
 use valk:crypto
 use valk:mem
 
-fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !connect !handshake {
++ fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !connect !handshake {
 
     let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw connect
 
@@ -14,11 +14,12 @@ fn connect(host: String, user: String, password: String, db: String, port: u32) 
         db: db
     }
     con.init() !>
+    con.password = "" // clear from memory
 
     return con
 }
 
-class Connection {
++ class Connection {
     con: net:Connection
     //
     username: String
