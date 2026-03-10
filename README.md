@@ -28,11 +28,13 @@ db.run("UPDATE users SET (name) VALUES (?) WHERE id = ?") ! panic("Error: %EMSG"
 // Select
 db.bind("id", 100)
 db.select("SELECT * FROM users WHERE id > :id") ! panic("Error: %EMSG")
+
 // Fetch 1-by-1
 let columns : Array[?String] = .{}
 while this.fetch_row(columns) ! panic("Error: %EMSG") {
     println("ROW DATA: " + columns.join(" | "))
 }
+
 // Fetch all
 let users = db.fetch_all() ! { assert(false) return }
 ```
