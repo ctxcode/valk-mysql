@@ -2,7 +2,7 @@
 use mysql:mysql
 
 fn main() {
-    let con = mysql:connect("127.0.0.1", "root", "root", "valk", 3306)
+    let con = mysql:connect("127.0.0.1", "root", "root", "valk", 3306) ! panic("Failed to connect: %EMSG")
 
     // Setup table
     con.run("CREATE TABLE IF NOT EXISTS `users` (
