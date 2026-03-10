@@ -1,21 +1,45 @@
 
-use mysql
-
 test "Query" {
-    let con = mysql:Connection.new("127.0.0.1", "root", "root", "valk", 3306, null)
-    con.connect() ! {
-        println("> Connection failed: " + EMSG)
-        assert(false)
-    }
-    assert(true)
+    let con = connect() ! { assert(false) return }
+    let name1 = "valk"
+    let name2 = "ctx"
+    let r : Array[Array[?String]] = .{}
 
-    let q = con.query("SELECT * FROM users WHERE id > ?") !!
-    q.bindv(10)
-    let rows = q.select() ! {
-        println("> Query failed: " + EMSG)
-        assert(false)
-        return
-    }
+    // Setup table
+    con.run("CREATE TABLE IF NOT EXISTS `users` (
+      `id` int NOT NULL AUTO_INCREMENT,
+      `name` varchar(50) DEFAULT NULL,
+      PRIMARY KEY (`id`)
+    )") ! { assert(false) return }
 
-    assert(rows.length == 1)
+    con.run("TRUNCATE TABLE users") ! { assert(false) return }
+
+    //
+    con.bind("name", name1)
+    con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+
+    con.bind("name", name1)
+    con.run("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
+    r = con.fetch_all() ! { assert(false) return }
+    assert(r.length == 1)
+
+    con.bind("name", name2)
+    con.run("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
+    r = con.fetch_all() ! { assert(false) return }
+    assert(r.length == 0)
+
+    con.bind("ids", Array[uint]{ 1, 2, 3 })
+    con.run("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
+    r = con.fetch_all() ! { assert(false) return }
+    assert(r.length == 1)
+
+    // Insert next
+    con.bind("name", name2)
+    con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+
+    con.bind("ids", Array[uint]{ 1, 2, 3 })
+    con.run("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
+    r = con.fetch_all() ! { assert(false) return }
+    assert(r.length == 2)
+
 }
