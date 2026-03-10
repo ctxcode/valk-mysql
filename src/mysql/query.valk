@@ -81,7 +81,7 @@ extend Connection {
             data += 4
             // type
             let type = read_int(data, 1)
-            println("TYPE: " + type)
+            // println("TYPE: " + type)
             this.column_types.append(type)
             data += 1
             // flags
@@ -286,8 +286,21 @@ extend Connection {
         return this.fetch_text_resultset(row) !>
     }
 
+    // + fn fetch[T](buffer: ?T (null)) bool !error {
+    //     buffer = buffer ?? T{}
+    //     #loop object buffer as prop
+    //     {
+    //         #if is_nullable_type(prop.type)
+    //         let nullable = true
+    //         #else
+    //         let nullable = false
+    //         #end
+    //         let size = size_of(prop.type)
+    //     }
+    //     #end
+    // }
+
     fn fetch_binary_resultset(row: Array[?String]) bool !error {
-        println("READ BINARY ROW")
         row.clear()
         let data : ptr = this.respbuf.data
         data += 1 // skip 0x00 header byte
@@ -310,7 +323,6 @@ extend Connection {
                 continue
             }
             //
-
             if type == FIELD_TYPE.LONG {
                 let v = @ptrv(data, i32, 0)
                 row.append(v)

@@ -19,20 +19,4 @@ test "Query" {
     while con.fetch_row(row) ! { assert(false) return } {
         println(row.join(" | "))
     }
-
-    // con.connect() ! {
-    //     println("> Connection failed: " + EMSG)
-    //     assert(false)
-    // }
-    // assert(true)
-
-    // let q = con.query("SELECT * FROM users WHERE id > ?") !!
-    // q.bindv(10)
-    // let rows = q.select() ! {
-    //     println("> Query failed: " + EMSG)
-    //     assert(false)
-    //     return
-    // }
-
-    // assert(rows.length == 1)
 }

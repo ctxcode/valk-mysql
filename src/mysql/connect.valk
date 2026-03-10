@@ -149,29 +149,19 @@ class Connection {
     fn auth_response() String {
         let method = this.auth_plugin
         if method == "mysql_native_password" {
-            println("SALT LEN: " + this.salt.length)
             let hash = crypto:Sha1{}
 
-            println("Password: " + this.password)
             hash.add_string_data(this.password)
             let hash1 = hash.final()
-            print("Hash1 bytes: ")
-            hash1.@cast(ptr).print_bytes(20)
 
             hash.reset()
             hash.add_hash_data(hash1)
             let hash2 = hash.final()
-            print("Hash2 bytes: ")
-            hash2.@cast(ptr).print_bytes(20)
 
             hash.reset()
             hash.add_string_data(this.salt)
             hash.add_hash_data(hash2)
             let hash3 = hash.final()
-            print("Salt bytes: ")
-            this.salt.data.@cast(ptr).print_bytes(20)
-            print("Hash3 bytes: ")
-            hash3.@cast(ptr).print_bytes(20)
 
             let auth_response : [u8 x 20] = { 0... }
             let i : uint = 0
@@ -179,9 +169,6 @@ class Connection {
                 auth_response[i] = hash1[i] ^ hash3[i]
                 i++
             }
-
-            print("Auth response bytes: ")
-            auth_response.@cast(ptr).print_bytes(20)
 
             return String.make_from_ptr(auth_response, 20)
 
@@ -317,9 +304,9 @@ class Connection {
         this.respbuf.append_from_ptr(buf.data.@offset(4), payload_len)
         buf.clear_until(payload_len + 4)
         //
-        println("RECV: " + (this.seqid - 1))
-        this.respbuf.data.@cast(ptr).print_bytes(this.respbuf.length)
-        println("------")
+        // println("RECV: " + (this.seqid - 1))
+        // this.respbuf.data.@cast(ptr).print_bytes(this.respbuf.length)
+        // println("------")
     }
 
     fn send() !send {
@@ -336,9 +323,9 @@ class Connection {
         pb.append(sb)
         sb.clear() // Clear send data
         //
-        println("SEND: " + id)
-        pb.data.@cast(ptr).print_bytes(pb.length)
-        println("------")
+        // println("SEND: " + id)
+        // pb.data.@cast(ptr).print_bytes(pb.length)
+        // println("------")
         //
         this.con.send_buffer(pb, 0, true) ! throw send
     }
