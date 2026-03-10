@@ -10,14 +10,20 @@ extend Connection {
     prep_param_count: uint (0)
     fetching: bool (false)
     is_statement: bool (false)
+    in_progress : bool (false)
 
     + fn run(q: String) !error {
-        if this.fetching : this.flush_result() !>
+        if this.in_progress : this.stop_query()
         //
+        this.in_progress = true
         this.is_statement = (this.binds.length + this.named_binds.length) > 0
         //
         if this.is_statement {
+            //
             q = this.replace_named_params(q) !>
+            this.binds.clear()
+            this.named_binds.clear()
+            //
             this.send_prep_query(q) !>
         } else {
             this.send_com_query(q) !>
@@ -28,10 +34,37 @@ extend Connection {
         this.col_count = colcount
         data += bytes
 
+        // Nothing to fetch
+        if colcount == 0 : return
+
         // Read columns
         this.read_column_data() !>
 
         this.fetching = true
+    }
+
+    fn stop_query() {
+        if this.fetching : this.flush_result() _
+        //
+        this.in_progress = false
+        this.fetching = false
+        this.column_names.clear()
+        this.column_types.clear()
+        this.final_binds.clear()
+        // Close statement
+        if this.is_statement {
+            this.is_statement = false
+            let data : ptr = this.sendbuf.data
+            let start = data
+            // COM_STMT_CLOSE
+            write_int(data, 0x19, 1)
+            this.seqid = 0
+            data += 1
+            write_int(data, this.statement_id, 4)
+            data += 4
+            this.sendbuf.length += data - start
+            this.send() _
+        }
     }
 
     fn read_column_data() !error {
@@ -257,32 +290,9 @@ extend Connection {
             this.check_error() ! throw error
             let header = read_int(this.respbuf.data, 1)
             if header == 0xFE {
-                this.stop_fetch()
                 break
             }
         }
-    }
-
-    fn stop_fetch() {
-        this.fetching = false
-        this.column_names.clear()
-        this.column_types.clear()
-        this.binds.clear()
-        this.named_binds.clear()
-        this.final_binds.clear()
-        // Close statement
-        if this.is_statement {
-            this.is_statement = false
-            let data : ptr = this.sendbuf.data
-            let start = data
-            write_int(data, 0x19, 1)
-            data += 1
-            write_int(data, this.statement_id, 4)
-            data += 4
-            this.sendbuf.length += data - start
-            this.send() _
-        }
-        // Clear binds
     }
 
     + fn fetch_all() Array[Array[?String]] !error {
@@ -304,7 +314,8 @@ extend Connection {
         let data : ptr = this.respbuf.data
         let header = read_int(data, 1)
         if header == 0xFE {
-            this.stop_fetch()
+            this.fetching = false
+            this.stop_query()
             return false
         }
 

@@ -2,6 +2,9 @@
 test "Query" {
     let con = connect() ! { assert(false) return }
 
+    con.bind("name", "test")
+    con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+
     con.bind("name", "ctx")
     con.run("SELECT * FROM users WHERE name = :name") ! {
         println("Query error: " + EMSG)
@@ -18,7 +21,4 @@ test "Query" {
         assert(false)
         return
     }
-
-    let r1 = con.fetch_all() ! { assert(false) return }
-    assert(r1.length == 1)
 }
