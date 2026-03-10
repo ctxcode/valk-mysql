@@ -1,86 +1,81 @@
 
 use valk:json
+use valk:type
 
 extend Connection {
     binds: Array[?json:Value] (.{})
-    bind_count: uint (0)
+    named_binds: Map[?json:Value] (.{})
     bind_data: ByteBuffer (.new())
+    final_binds: Array[?json:Value] (.{})
 
     fn bind(name: String, value: $T) {
+        let v = json:value(value)
+        this.named_binds.set(name, v)
     }
     fn bindv(value: $T) {
         let v = json:value(value)
         this.binds.append(v)
-        this.bind_count++
+    }
+
+    + fn replace_named_params(query: String) String !error {
+        let r = type:StringComposer.new()
+        let str_mode = false
+        let ignore_next = false
+        let binds = this.binds
+        let final_binds = this.final_binds
+        let bindi : uint = 0
+
+        each query as ch, i {
+            if str_mode {
+                r.append_byte(ch)
+                if ignore_next {
+                    ignore_next = false
+                    continue
+                }
+                if ch == '\\' : ignore_next = true
+                else if ch == '"' : str_mode = false
+                continue
+            }
+            if ch == ':' {
+                let start = i + 1
+                let nch = query[start]
+                if nch.is_alpha() || nch == '_' {
+                    let end = start
+                    while true {
+                        let nch = query[end + 1]
+                        if nch.is_alpha_numeric() || nch == '_' {
+                            end++
+                            continue
+                        }
+                        break
+                    }
+                    let len = end - start + 1
+                    let name = query.part(start, len)
+                    let bindv = this.named_binds.get(name) ! throw error, "Cannot find named binding: '" + name + "'"
+                    if isset(bindv) {
+                        if bindv.is_array() {
+                            each bindv.array() as val, i {
+                                if i > 0 : r.append_byte(',')
+                                r.append_byte('?')
+                                final_binds.append(val)
+                            }
+                        } else {
+                            r.append_byte('?')
+                            final_binds.append(bindv)
+                        }
+                    }
+                    i += len
+                    continue
+                }
+            } else if ch == '?' {
+                let val = binds.get(bindi++) ! throw error, "You have more '?' tokens than the amount of binded values"
+                final_binds.append(val)
+            } else if ch == '"' {
+                str_mode = true
+            }
+            r.append_byte(ch)
+        }
+
+        return r.to_string()
     }
 }
-
-// use valk:gc
-// use valk:json
-
-// class Bind {
-//     v: Value
-//     size: u64 (0)
-//     is_null: bool (false)
-//     error: bool (false)
-// }
-
-// extend Statement {
-
-//     + fn bind(name: String, value: $T) {
-//         let v = json:value(value)
-//         this.named_binds.set(name, v)
-//     }
-//     + fn bindv(value: $T) {
-//         let v = json:value(value)
-//         this.binds.append(v)
-//     }
-
-//     fn allocate_bindings() ?gc:GcPtr {
-//         let binds = this.final_binds
-//         let len = binds.length
-//         if len == 0 : return null
-//         let size = size_of(<MySQLBind>) * len
-//         let r = gc:alloc(size)
-//         let list = r.@cast(*[<MySQLBind>])
-//         each binds as b, i {
-//             let val = b.v
-//             let mb = list[i]
-
-//             // Refs
-//             mb.is_null = @ref(b.is_null)
-//             mb.error = @ref(b.error)
-//             mb.length = @ref(b.size)
-//             // Defaults
-//             mb.is_unsigned = true
-//             mb.buffer_length = 0
-//             mb.buffer = null
-//             //
-//             // let type_map = [i32 x 5]{FIELD_TYPE.NULL, FIELD_TYPE.TINY, FIELD_TYPE.LONGLONG, FIELD_TYPE.DOUBLE, FIELD_TYPE.STRING}
-//             if val.is_null() {
-//                 mb.buffer_type = FIELD_TYPE.NULL
-//                 b.is_null = true
-//             } else if val.is_bool() {
-//                 mb.buffer_type = FIELD_TYPE.TINY
-//                 b.size = size_of(bool)
-//                 mb.buffer = @ref(val.bool_value)
-//             } else if val.is_int() {
-//                 mb.buffer_type = FIELD_TYPE.LONGLONG
-//                 b.size = size_of(int)
-//                 mb.buffer = @ref(val.int_value)
-//                 mb.is_unsigned = false
-//             } else if val.is_float() {
-//                 mb.buffer_type = FIELD_TYPE.DOUBLE
-//                 b.size = size_of(float)
-//                 mb.buffer = @ref(val.float_value)
-//                 mb.is_unsigned = false
-//             } else if val.is_string() {
-//                 mb.buffer_type = FIELD_TYPE.STRING
-//                 b.size = val.string_value.bytes
-//                 mb.buffer = val.string_value.data_cstring
-//             }
-//             mb.buffer_length = b.size
-//         }
-//         return r
-//     }
-// }

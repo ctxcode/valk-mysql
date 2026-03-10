@@ -1,0 +1,6 @@
+
+use mysql
+
+fn connect() mysql:Connection !connect {
+    return mysql:connect("127.0.0.1", "test", "root", "valk", 3306) ! throw connect, EMSG
+}

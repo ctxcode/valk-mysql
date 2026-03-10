@@ -1,22 +1,16 @@
 
-use mysql
-
 test "Query" {
-    let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3307) ! {
-        println("Connection failed: " + EMSG)
-        assert(false)
-        return
-    }
+    let con = connect() ! { assert(false) return }
 
-    con.bindv(1)
-    con.run("SELECT * FROM users WHERE id = ?") ! {
+    // con.bindv(1)
+    // con.bind("ids", Array[uint]{ 1, 2, 3 })
+    con.bind("name", "ctx")
+    con.run("SELECT * FROM users WHERE name = :name") ! {
         println("Query error: " + EMSG)
         assert(false)
         return
     }
 
-    let row : Array[?String] = .{}
-    while con.fetch_row(row) ! { assert(false) return } {
-        println(row.join(" | "))
-    }
+    let r1 = con.fetch_all() ! { assert(false) return }
+    assert(r1.length == 1)
 }
