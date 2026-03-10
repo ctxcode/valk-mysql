@@ -5,8 +5,16 @@ test "Query" {
     let name2 = "ctx"
     let r : Array[Array[?String]] = .{}
 
+    // Setup table
+    con.run("CREATE TABLE IF NOT EXISTS `users` (
+      `id` int NOT NULL AUTO_INCREMENT,
+      `name` varchar(50) DEFAULT NULL,
+      PRIMARY KEY (`id`)
+    )") ! { assert(false) return }
+
     con.run("TRUNCATE TABLE users") ! { assert(false) return }
 
+    //
     con.bind("name", name1)
     con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
 
