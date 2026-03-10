@@ -1,7 +1,7 @@
 
 # valk-mysql
 
-A package to connect/query mysql databases
+A package to query mysql databases. The package is purely written in Valk and has no os-package dependencies.
 
 ## Install
 
