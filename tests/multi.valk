@@ -1,0 +1,8 @@
+
+test "Multi Statement" {
+    let con = connect() ! { assert(false) return }
+    // Setup table
+    let sql = #embed("multi.sql")
+    con.run(sql) ! { assert(false) return }
+    con.run(sql) ! { assert(false) return }
+}
