@@ -1,5 +1,6 @@
 
-vc=~/www/valk2/valk
+vc=valk
+# vc=~/www/valk2/valk
 
 test:
 	$(vc) build ./tests/*.valk ./tests --test -r

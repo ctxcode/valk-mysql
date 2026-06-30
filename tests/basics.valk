@@ -1,6 +1,10 @@
 
 test "Query" {
-    let con = connect() ! { assert(false) return }
+    let con = connect() ! {
+      println(E.message)
+      assert(false)
+      return
+    }
     let name1 = "valk"
     let name2 = "ctx"
     let r : Array[Array[?String]] = .{}

@@ -3,9 +3,9 @@ use valk:net
 use valk:crypto
 use valk:mem
 
-+ fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !connect !handshake {
++ fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !Error {
 
-    let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw connect
+    let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
     let con = Connection {
         con: sock
@@ -40,7 +40,7 @@ use valk:mem
     salt: String ("")
     //
 
-    fn init() !handshake !unsupported {
+    fn init() !Error {
         this.handshake_init() !>
         this.check_auth_method() !>
         this.handshake_response() !>
@@ -73,19 +73,19 @@ use valk:mem
         }
     }
 
-    fn check_auth_method() !unsupported {
+    fn check_auth_method() !Error {
         if this.auth_plugin != "mysql_native_password"
         && this.auth_plugin != "caching_sha2_password"
-        : throw unsupported, "Unsupported authentication method: %{ this.auth_plugin }"
+        : throw .unsupported { message: "Unsupported authentication method: %{ this.auth_plugin }" }
     }
 
-    fn handshake_init() !unsupported !handshake {
-        this.recv() ! throw handshake, EMSG
+    fn handshake_init() !Error {
+        this.recv() !>
         let data = this.respbuf.data.@cast(ptr)
         // let start = data
         //
         let proto = read_int(data, 1) // Always 10
-        if proto != 10 : throw unsupported, "Unsupported protocol version"
+        if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
         data += 1
         //
         let version : String = data.@cast(cstring)
@@ -195,7 +195,7 @@ use valk:mem
         panic("Bug: Unhandled MySQL authentication method")
     }
 
-    fn handshake_response() !handshake {
+    fn handshake_response() !Error {
         // Response
         let ccaps : u32 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_LONG_PASSWORD | CAP.CLIENT_MULTI_STATEMENTS
         this.caps = ccaps
@@ -256,14 +256,14 @@ use valk:mem
         // Send
         let len : uint = sdata - send_start
         sbuf.length += len
-        this.send() ! throw handshake
+        this.send() !>
 
         // Resp
-        this.recv() ! throw handshake, EMSG
-        this.check_error() ! throw handshake, EMSG
+        this.recv() !>
+        this.check_error() !>
     }
 
-    fn check_error() !error {
+    fn check_error() !Error {
         let data = this.respbuf.data.@cast(ptr)
         let start = data
         let header = read_int(data, 1)
@@ -282,14 +282,14 @@ use valk:mem
         let msglen = this.respbuf.length - (data - start)
         let msg : String = String.make_from_ptr(data, msglen)
 
-        throw error, "MySQL Error: " + msg
+        throw .error { message: msg }
     }
 
-    fn recv() !recv {
+    fn recv() !Error {
         let buf = this.recvbuf
         let recv_bytes : uint = buf.length
-        if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw recv
-        if recv_bytes < 4 : throw recv, "Invalid MySQL server response (missing packet bytes)"
+        if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
+        if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
         //
         let data = buf.data.@cast(ptr)
         let payload_len : uint = read_int(data, 3)
@@ -298,7 +298,7 @@ use valk:mem
         data += 1
         // Read more if needed
         while recv_bytes < (payload_len + 4) {
-            recv_bytes += this.con.recv(buf, 1024) ! throw recv
+            recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
         }
         //
         this.respbuf.clear()
@@ -310,7 +310,7 @@ use valk:mem
         // println("------")
     }
 
-    fn send() !send {
+    fn send() !Error {
         let sb = this.sendbuf
         let pb = this.packetbuf
         let id = this.seqid++
@@ -328,6 +328,6 @@ use valk:mem
         // pb.data.@cast(ptr).print_bytes(pb.length)
         // println("------")
         //
-        this.con.send_buffer(pb, 0, true) ! throw send
+        this.con.send_buffer(pb, 0, true) ! throw .error { message: "Failed to send bytes to server" }
     }
 }

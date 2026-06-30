@@ -12,7 +12,7 @@ extend Connection {
     is_statement: bool (false)
     in_progress : bool (false)
 
-    + fn run(q: String) !error {
+    + fn run(q: String) !Error {
         if this.in_progress : this.stop_query()
         //
         this.in_progress = true
@@ -67,7 +67,7 @@ extend Connection {
         }
     }
 
-    fn read_column_data() !error {
+    fn read_column_data() !Error {
         let names = this.column_names
         let types = this.column_types
         names.clear()
@@ -76,8 +76,8 @@ extend Connection {
         let i : uint = 0
         let col_count = this.col_count
         while i++ < col_count {
-            this.recv() ! throw error
-            this.check_error() ! throw error
+            this.recv() ! throw .error
+            this.check_error() ! throw .error
             let data : ptr = this.respbuf.data
             // catalog (def)
             let strlen, bytes = read_int_enc(data)
@@ -127,18 +127,18 @@ extend Connection {
         }
     }
 
-    fn send_com_query(q: String) !error {
+    fn send_com_query(q: String) !Error {
         let buf = this.sendbuf
         buf.append_byte(0x03)
         buf.append_str(q)
         // Send
         this.seqid = 0
-        this.send() ! throw error, EMSG
-        this.recv() ! throw error, EMSG
-        this.check_error() ! throw error, EMSG
+        this.send() !>
+        this.recv() !>
+        this.check_error() !>
     }
 
-    fn prepare(q: String) !error {
+    fn prepare(q: String) !Error {
         let buf = this.sendbuf
         // COM_STMT_PREPARE
         this.seqid = 0
@@ -187,7 +187,7 @@ extend Connection {
         }
     }
 
-    fn send_prep_query(q: String) !error {
+    fn send_prep_query(q: String) !Error {
         // Prepare
         this.prepare(q) !>
         // Execute
@@ -215,7 +215,7 @@ extend Connection {
         let binds = this.final_binds
         let i : uint = 0
         while i < param_count {
-            let bind = binds.get(i++) ! throw error, "Missing bind values"
+            let bind = binds.get(i++) ! throw .error { message: "Missing bind values" }
             if isset(bind) && !bind.is_null() : continue
             let byte_pos = (i - 1) / 8
             let bit_pos = ((i - 1) % 8).to(u8)
@@ -247,7 +247,7 @@ extend Connection {
             } else if bind.is_float() {
                 write_int(buf.data.@offset(buf.length), FIELD_TYPE.DOUBLE, 2)
             } else {
-                throw error, "Bug: Unhandled bind value type"
+                throw .error { message: "Bug: Unhandled bind value type" }
             }
             buf.length += 2
         }
@@ -273,21 +273,21 @@ extend Connection {
                 @ptrv(buf.data.@offset(buf.length), f64) = bind.float_value
                 buf.length += 8
             } else {
-                throw error, "Bug: Unhandled bind value type"
+                throw .error { message: "Bug: Unhandled bind value type" }
             }
         }
 
         // Send
-        this.send() ! throw error, EMSG
-        this.recv() ! throw error, EMSG
-        this.check_error() ! throw error, EMSG
+        this.send() !>
+        this.recv() !>
+        this.check_error() !>
     }
 
-    fn flush_result() !error {
+    fn flush_result() !Error {
         if !this.fetching : return
         while true {
-            this.recv() ! throw error
-            this.check_error() ! throw error
+            this.recv() !>
+            this.check_error() !>
             let header = read_int(this.respbuf.data, 1)
             if header == 0xFE {
                 break
@@ -295,7 +295,7 @@ extend Connection {
         }
     }
 
-    + fn fetch_all() Array[Array[?String]] !error {
+    + fn fetch_all() Array[Array[?String]] !Error {
         let result = Array[Array[?String]]{}
         let row : Array[?String] = .{}
         while this.fetch_row(row) !> {
@@ -304,13 +304,13 @@ extend Connection {
         return result
     }
 
-    + fn fetch_row(row: Array[?String]) bool !error {
+    + fn fetch_row(row: Array[?String]) bool !Error {
         row.clear()
         if !this.fetching : return false
 
         // Next result
-        this.recv() ! throw error
-        this.check_error() ! throw error
+        this.recv() !>
+        this.check_error() !>
         let data : ptr = this.respbuf.data
         let header = read_int(data, 1)
         if header == 0xFE {
@@ -339,7 +339,7 @@ extend Connection {
     //     #end
     // }
 
-    fn fetch_binary_resultset(row: Array[?String]) bool !error {
+    fn fetch_binary_resultset(row: Array[?String]) bool !Error {
         row.clear()
         let data : ptr = this.respbuf.data
         data += 1 // skip 0x00 header byte
@@ -352,7 +352,7 @@ extend Connection {
         while i < col_count {
             let byte_pos = i / 8
             let bit_pos = (i % 8).to(u8)
-            let type = this.column_types.get(i) ! throw error, "Bug: Missing column type"
+            let type = this.column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
             i++
             // Check if is null
             let byte = @ptrv(null_data, u8, byte_pos)
@@ -377,13 +377,13 @@ extend Connection {
                 data += strlen
                 row.append(str)
             } else {
-                throw error, "Bug: Unhandled mysql type: " + type
+                throw .error { message: "Bug: Unhandled mysql type: " + type }
             }
         }
         return true
     }
 
-    fn fetch_text_resultset(row: Array[?String]) bool !error {
+    fn fetch_text_resultset(row: Array[?String]) bool !Error {
         let data : ptr = this.respbuf.data
         //
         let x = this.col_count

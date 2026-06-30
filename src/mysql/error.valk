@@ -1,0 +1,2 @@
+
+error Error (connect, handshake, unsupported, error) payload { message: String }
