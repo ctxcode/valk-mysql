@@ -1,7 +1,8 @@
 
 enum CAP : u32 {
  	// Use the improved version of Old Password Authentication.
-    CLIENT_LONG_PASSWORD (1)
+   //  CLIENT_LONG_PASSWORD (1) // New more secure passwords
+    CLIENT_MYSQL (1) // Used by MariaDB instead of CLIENT_LONG_PASSWORD
  	// Send found rows instead of affected rows in EOF_Packet.
     CLIENT_FOUND_ROWS (2)
  	// Get all column flags.
@@ -31,7 +32,8 @@ enum CAP : u32 {
  	// DEPRECATED: Old flag for 4.1 protocol
     CLIENT_RESERVED (16384)
  	// DEPRECATED: Old flag for 4.1 authentication \ CLIENT_SECURE_CONNECTION.
-    CLIENT_RESERVED2 (32768)
+   //  CLIENT_RESERVED2 (32768)
+    CLIENT_SECURE_CONNECTION (32768)
  	// Enable/disable multi-stmt support.
     CLIENT_MULTI_STATEMENTS (1 << 16)
  	// Enable/disable multi-results.

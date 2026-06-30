@@ -62,6 +62,8 @@ use valk:mem
             //
             this.auth_plugin = auth_plugin
             this.salt = salt
+            // println("auth:" + auth_plugin)
+            // println("salt:" + salt)
             // 
             this.check_auth_method() !>
             let auth_response = this.auth_response()
@@ -89,6 +91,7 @@ use valk:mem
         data += 1
         //
         let version : String = data.@cast(cstring)
+        // println("version: " + version)
         data += version.length + 1
         //
         this.con_id = read_int(data, 4)
@@ -110,7 +113,6 @@ use valk:mem
         // capability_flags_2
         let caps2 = read_int(data, 2)
         caps = (caps2 << 16) | caps
-        this.scaps = caps
         data += 2
         //
         let auth_plugin_data_len : uint = 0
@@ -118,18 +120,29 @@ use valk:mem
             // length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
             auth_plugin_data_len = read_int(data, 1)
         } else {
-            // let skip = read_int(data, 1)
+            // 0x00
         }
         data += 1
         // reserved bytes
-        data += 10
+        data += 6
+        if caps & CAP.CLIENT_MYSQL > 0 {
+            // MySQL - filler bytes
+            data += 4
+        } else {
+            // MariaDB - caps part 3
+            let caps3 = read_int(data, 4)
+            caps = (caps3 << 32) | caps
+            data += 4
+        }
         // auth-plugin-data-part-2
-        // Rest of the plugin provided data (scramble), $len=MAX(13, length of auth-plugin-data - 8)
-        let auth_p2_len : uint = 13
-        if auth_plugin_data_len - 8 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 8
-        let authp2 = String.make_from_ptr(data, auth_plugin_data_len)
-        this.salt = authp1 + authp2
-        data += auth_p2_len
+        if caps & CAP.CLIENT_SECURE_CONNECTION > 0 {
+            // Rest of the plugin provided data (scramble), $len=MAX(12, length of auth-plugin-data - 9)
+            let auth_p2_len : uint = 12
+            if auth_plugin_data_len >= 9 && auth_plugin_data_len - 9 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 9
+            let authp2 = String.make_from_ptr(data, auth_plugin_data_len)
+            this.salt = authp1 + authp2
+            data += auth_p2_len + 1
+        }
         //
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // name of the auth_method that the auth_plugin_data belongs to
@@ -137,6 +150,9 @@ use valk:mem
             this.auth_plugin = plugin_name
             data += plugin_name.bytes + 1
         }
+
+        // Store capabilities
+        this.scaps = caps
 
         //////////////////////////////////////////////////
         //////////////////////////////////////////////////
@@ -197,7 +213,8 @@ use valk:mem
 
     fn handshake_response() !Error {
         // Response
-        let ccaps : u32 = CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_LONG_PASSWORD | CAP.CLIENT_MULTI_STATEMENTS
+        let scaps = this.scaps
+        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
         this.caps = ccaps
         //
         let ccharset : u8 = 45 // utf8mb4_general_ci
@@ -208,10 +225,10 @@ use valk:mem
 
         // Write resp
         let sbuf = this.sendbuf
-        sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + 1024)
+        sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + auth_response.length + 1024)
         let sdata = sbuf.data.@cast(ptr)
         let send_start = sdata
-        // Caps
+        // Client caps
         write_int(sdata, ccaps, 4)
         sdata += 4
         // Max packet size
@@ -221,31 +238,54 @@ use valk:mem
         write_int(sdata, ccharset, 1)
         sdata += 1
         // Filler (0x00 bytes)
-        mem:clear(sdata, 23)
-        sdata += 23
+        mem:clear(sdata, 19)
+        sdata += 19
+        if scaps & CAP.CLIENT_MYSQL > 0 {
+            // Mysql - filler bytes
+            mem:clear(sdata, 4)
+            sdata += 4
+        } else {
+            // Maria DB - Client caps part 2
+            write_int(sdata, ccaps >> 32, 4)
+            sdata += 4
+        }
+
         // Username
         mem:copy(username.data, sdata, username.length + 1)
         sdata += username.length + 1
 
-        if ccaps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+        // If password
+        if scaps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
+            // Encoded string
+            println("A")
             sdata += write_int_encoded(sdata, auth_response.length)
+            mem:copy(auth_response.data, sdata, auth_response.length)
+            sdata += auth_response.length
+        } else if scaps & CAP.CLIENT_SECURE_CONNECTION > 0 {
+            // 1 length byte + string bytes
+            println("B")
+            write_int(sdata, auth_response.length, 1)
+            sdata += 1
             mem:copy(auth_response.data, sdata, auth_response.length)
             sdata += auth_response.length
         } else {
-            sdata += write_int_encoded(sdata, auth_response.length)
+            println("C")
+            // Null terminated string
             mem:copy(auth_response.data, sdata, auth_response.length)
             sdata += auth_response.length
+            mem:clear(sdata, 1)
+            sdata += 1
         }
 
-        if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+        if scaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
             mem:copy(db.data, sdata, db.length + 1)
             sdata += db.length + 1
         }
-        if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
+        if scaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             mem:copy(auth_plugin_name.data, sdata, auth_plugin_name.length + 1)
-            sdata += db.length + 1
+            sdata += auth_plugin_name.length + 1
         }
-        if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
+        if scaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
             sdata += write_int_encoded(sdata, 0)
         }
         if ccaps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
