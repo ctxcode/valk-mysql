@@ -84,7 +84,6 @@ use valk:mem
     fn handshake_init() !Error {
         this.recv() !>
         let data = this.respbuf.data.@cast(ptr)
-        // let start = data
         //
         let proto = read_int(data, 1) // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
@@ -98,6 +97,7 @@ use valk:mem
         data += 4
         // auth-plugin-data-part-1
         let authp1 = String.make_from_ptr(data, 8)
+        let authp2 = ""
         data += 8
         // filler
         data += 1
@@ -137,10 +137,9 @@ use valk:mem
         // auth-plugin-data-part-2
         if caps & CAP.CLIENT_SECURE_CONNECTION > 0 {
             // Rest of the plugin provided data (scramble), $len=MAX(12, length of auth-plugin-data - 9)
-            let auth_p2_len : uint = 12
-            if auth_plugin_data_len >= 9 && auth_plugin_data_len - 9 > auth_p2_len : auth_p2_len = auth_plugin_data_len - 9
-            let authp2 = String.make_from_ptr(data, auth_plugin_data_len)
-            this.salt = authp1 + authp2
+            let auth_p2_len : uint = auth_plugin_data_len - 9
+            if auth_p2_len < 12 || auth_plugin_data_len < 9 : auth_p2_len = 12
+            authp2 = String.make_from_ptr(data, auth_p2_len)
             data += auth_p2_len + 1
         }
         //
@@ -153,6 +152,7 @@ use valk:mem
 
         // Store capabilities
         this.scaps = caps
+        this.salt = authp1 + authp2
 
         //////////////////////////////////////////////////
         //////////////////////////////////////////////////
@@ -214,7 +214,7 @@ use valk:mem
     fn handshake_response() !Error {
         // Response
         let scaps = this.scaps
-        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
+        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
         this.caps = ccaps
         //
         let ccharset : u8 = 45 // utf8mb4_general_ci
@@ -238,54 +238,40 @@ use valk:mem
         write_int(sdata, ccharset, 1)
         sdata += 1
         // Filler (0x00 bytes)
-        mem:clear(sdata, 19)
-        sdata += 19
-        if scaps & CAP.CLIENT_MYSQL > 0 {
-            // Mysql - filler bytes
-            mem:clear(sdata, 4)
-            sdata += 4
-        } else {
-            // Maria DB - Client caps part 2
-            write_int(sdata, ccaps >> 32, 4)
-            sdata += 4
-        }
+        mem:clear(sdata, 23)
+        sdata += 23
 
         // Username
-        mem:copy(username.data, sdata, username.length + 1)
-        sdata += username.length + 1
+        mem:copy(username.data, sdata, username.length)
+        sdata += username.length
+        mem:clear(sdata, 1)
+        sdata += 1
 
-        // If password
-        if scaps & CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA > 0 {
-            // Encoded string
-            println("A")
-            sdata += write_int_encoded(sdata, auth_response.length)
-            mem:copy(auth_response.data, sdata, auth_response.length)
-            sdata += auth_response.length
-        } else if scaps & CAP.CLIENT_SECURE_CONNECTION > 0 {
-            // 1 length byte + string bytes
-            println("B")
-            write_int(sdata, auth_response.length, 1)
-            sdata += 1
-            mem:copy(auth_response.data, sdata, auth_response.length)
-            sdata += auth_response.length
-        } else {
-            println("C")
-            // Null terminated string
-            mem:copy(auth_response.data, sdata, auth_response.length)
-            sdata += auth_response.length
+        // Auth response (doesnt work in this request for mariadb)
+        // Len encoded string - new
+        // sdata += write_int_encoded(sdata, auth_response.length)
+        // mem:copy(auth_response.data, sdata, auth_response.length)
+        // sdata += auth_response.length
+        // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
+        // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
+        mem:clear(sdata, 1)
+        sdata += 1
+
+        if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+            // DB name - null terminated string
+            mem:copy(db.data, sdata, db.length)
+            sdata += db.length
             mem:clear(sdata, 1)
             sdata += 1
         }
-
-        if scaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
-            mem:copy(db.data, sdata, db.length + 1)
-            sdata += db.length + 1
+        if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
+            // Auth plugin - null terminated string
+            mem:copy(auth_plugin_name.data, sdata, auth_plugin_name.length)
+            sdata += auth_plugin_name.length
+            mem:clear(sdata, 1)
+            sdata += 1
         }
-        if scaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
-            mem:copy(auth_plugin_name.data, sdata, auth_plugin_name.length + 1)
-            sdata += auth_plugin_name.length + 1
-        }
-        if scaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
+        if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
             sdata += write_int_encoded(sdata, 0)
         }
         if ccaps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
