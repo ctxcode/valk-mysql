@@ -2,5 +2,5 @@
 use mysql:mysql
 
 fn connect() mysql:Connection !mysql:Error {
-    return mysql:connect("127.0.0.1", "test", "root", "valk", 3306) !>
+    return mysql:connect("127.0.0.1", "test", "root", "valk", 3307) !>
 }

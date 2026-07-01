@@ -28,8 +28,8 @@ use valk:mem
     //
     sendbuf: ByteBuffer (.new())
     packetbuf: ByteBuffer (.new())
+    databuf: ByteBuffer (.new())
     recvbuf: ByteBuffer (.new())
-    respbuf: ByteBuffer (.new())
     seqid: u8 (0)
     // Connection info
     con_id : uint (0)
@@ -45,7 +45,7 @@ use valk:mem
         this.check_auth_method() !>
         this.handshake_response() !>
         // Check auth switch
-        let data = this.respbuf.data.@cast(ptr)
+        let data = this.recvbuf.data.@cast(ptr)
         let header = read_int(data, 1)
         if header == 0xFE {
             // Switch auth
@@ -55,7 +55,7 @@ use valk:mem
             let auth_plugin : String = data.@cast(cstring)
             data += auth_plugin.bytes + 1
             // Read salt
-            // let rem : uint = this.respbuf.length - (data - start)
+            // let rem : uint = this.recvbuf.length - (data - start)
             // let salt = String.make_from_ptr(data, rem)
             let salt : String = data.@cast(cstring)
             data += salt.bytes + 1
@@ -83,7 +83,7 @@ use valk:mem
 
     fn handshake_init() !Error {
         this.recv() !>
-        let data = this.respbuf.data.@cast(ptr)
+        let data = this.recvbuf.data.@cast(ptr)
         //
         let proto = read_int(data, 1) // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
@@ -290,7 +290,7 @@ use valk:mem
     }
 
     fn check_error() !Error {
-        let data = this.respbuf.data.@cast(ptr)
+        let data = this.recvbuf.data.@cast(ptr)
         let start = data
         let header = read_int(data, 1)
         if header != 0xFF : return
@@ -305,14 +305,14 @@ use valk:mem
             data += 5
         }
 
-        let msglen = this.respbuf.length - (data - start)
+        let msglen = this.recvbuf.length - (data - start)
         let msg : String = String.make_from_ptr(data, msglen)
 
         throw .error { message: msg }
     }
 
     fn recv() !Error {
-        let buf = this.recvbuf
+        let buf = this.databuf
         let recv_bytes : uint = buf.length
         if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
         if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
@@ -327,12 +327,12 @@ use valk:mem
             recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
         }
         //
-        this.respbuf.clear()
-        this.respbuf.append_from_ptr(buf.data.@offset(4), payload_len)
+        this.recvbuf.clear()
+        this.recvbuf.append_from_ptr(buf.data.@offset(4), payload_len)
         buf.clear_until(payload_len + 4)
         //
         // println("RECV: " + (this.seqid - 1))
-        // this.respbuf.data.@cast(ptr).print_bytes(this.respbuf.length)
+        // this.recvbuf.data.@cast(ptr).print_bytes(this.recvbuf.length)
         // println("------")
     }
 

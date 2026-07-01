@@ -29,7 +29,7 @@ extend Connection {
             this.send_com_query(q) !>
         }
         //
-        let data : ptr = this.respbuf.data
+        let data : ptr = this.recvbuf.data
         let colcount, bytes = read_int_enc(data)
         this.col_count = colcount
         data += bytes
@@ -78,7 +78,7 @@ extend Connection {
         while i++ < col_count {
             this.recv() ! throw .error
             this.check_error() ! throw .error
-            let data : ptr = this.respbuf.data
+            let data : ptr = this.recvbuf.data
             // catalog (def)
             let strlen, bytes = read_int_enc(data)
             data += bytes
@@ -151,7 +151,7 @@ extend Connection {
         this.recv() !>
         this.check_error() !>
         //
-        let data : ptr = this.respbuf.data
+        let data : ptr = this.recvbuf.data
         // let header = read_int(data, 1)
         data += 1
         // Statement ID
@@ -288,7 +288,7 @@ extend Connection {
         while true {
             this.recv() !>
             this.check_error() !>
-            let header = read_int(this.respbuf.data, 1)
+            let header = read_int(this.recvbuf.data, 1)
             if header == 0xFE {
                 break
             }
@@ -311,7 +311,7 @@ extend Connection {
         // Next result
         this.recv() !>
         this.check_error() !>
-        let data : ptr = this.respbuf.data
+        let data : ptr = this.recvbuf.data
         let header = read_int(data, 1)
         if header == 0xFE {
             this.fetching = false
@@ -341,7 +341,7 @@ extend Connection {
 
     fn fetch_binary_resultset(row: Array[?String]) bool !Error {
         row.clear()
-        let data : ptr = this.respbuf.data
+        let data : ptr = this.recvbuf.data
         data += 1 // skip 0x00 header byte
         let null_data = data
         let col_count = this.col_count
@@ -384,7 +384,7 @@ extend Connection {
     }
 
     fn fetch_text_resultset(row: Array[?String]) bool !Error {
-        let data : ptr = this.respbuf.data
+        let data : ptr = this.recvbuf.data
         //
         let x = this.col_count
         while x-- > 0 {
