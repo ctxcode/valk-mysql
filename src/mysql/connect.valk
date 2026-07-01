@@ -42,6 +42,7 @@ use valk:mem
     salt: String ("")
     //
     ssl_enabled: bool (false)
+    + debug: bool (false)
     //
 
     fn init() !Error {
@@ -54,6 +55,8 @@ use valk:mem
             let data = this.recvbuf.data.@cast(ptr)
             let header = read_int(data, 1)
             if header == 0 : break
+            // Check error
+            this.check_error() !>
             // Check auth switch
             if this.handshake_auth_switch() !> : continue
             // Check for more auth data
@@ -116,9 +119,11 @@ use valk:mem
         this.recvbuf.append_from_ptr(buf.data.@offset(4), payload_len)
         buf.clear_until(payload_len + 4)
         //
-        // println("RECV: " + (this.seqid - 1))
-        // this.recvbuf.data.@cast(ptr).print_bytes(this.recvbuf.length)
-        // println("------")
+        if this.debug {
+            println("RECV: " + (this.seqid - 1))
+            this.recvbuf.data.@cast(ptr).print_bytes(this.recvbuf.length)
+            println("------")
+        }
     }
 
     fn send() !Error {
@@ -135,9 +140,11 @@ use valk:mem
         pb.append(sb)
         sb.clear() // Clear send data
         //
-        // println("SEND: " + id)
-        // pb.data.@cast(ptr).print_bytes(pb.length)
-        // println("------")
+        if this.debug {
+            println("SEND: " + id)
+            pb.data.@cast(ptr).print_bytes(pb.length)
+            println("------")
+        }
         //
         this.con.send_buffer(pb, 0, true) ! throw .error { message: "Failed to send bytes to server" }
     }

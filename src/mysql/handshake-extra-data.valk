@@ -23,7 +23,6 @@ extend Connection {
                     sbuf.append_str(this.password)
                     sbuf.append_byte(0)
                     this.send() !>
-                    this.check_error() !>
                     // Receive OK
                     this.recv() !>
                     return true
