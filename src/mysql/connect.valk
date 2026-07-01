@@ -9,6 +9,7 @@ use valk:mem
 
     let con = Connection {
         con: sock
+        host: host
         username: user
         password: password
         db: db
@@ -22,6 +23,7 @@ use valk:mem
 + class Connection {
     con: net:Connection
     //
+    host: String
     username: String
     password: String
     db: String
@@ -39,254 +41,37 @@ use valk:mem
     auth_data: String ("")
     salt: String ("")
     //
+    ssl_enabled: bool (false)
+    //
 
     fn init() !Error {
         this.handshake_init() !>
         this.check_auth_method() !>
         this.handshake_response() !>
-        // Check auth switch
-        let data = this.recvbuf.data.@cast(ptr)
-        let header = read_int(data, 1)
-        if header == 0xFE {
-            // Switch auth
-            // let start = data
-            data += 1
-            // Auth plugin name
-            let auth_plugin : String = data.@cast(cstring)
-            data += auth_plugin.bytes + 1
-            // Read salt
-            // let rem : uint = this.recvbuf.length - (data - start)
-            // let salt = String.make_from_ptr(data, rem)
-            let salt : String = data.@cast(cstring)
-            data += salt.bytes + 1
-            //
-            this.auth_plugin = auth_plugin
-            this.salt = salt
-            // println("auth:" + auth_plugin)
-            // println("salt:" + salt)
-            // 
-            this.check_auth_method() !>
-            let auth_response = this.auth_response()
-            this.sendbuf.append_str(auth_response)
-            // this.sendbuf.append_byte(0)
-            this.send() !>
-            this.recv() !>
-            this.check_error() !>
+        let count = 0
+        while true {
+            if count++ > 10 : throw .error { message: "Infinite loop bug" }
+            let data = this.recvbuf.data.@cast(ptr)
+            let header = read_int(data, 1)
+            if header == 0 : break
+            // Check auth switch
+            if this.handshake_auth_switch() !> : continue
+            // Check for more auth data
+            if this.handshake_extra_data() !> : continue
+            // Unknown header byte
+            this.unsupported()
         }
+    }
+
+    fn unsupported() !Error $throw {
+        throw .handshake { message: "This package has not implemented all protocols. Unexpected bytes received." }
     }
 
     fn check_auth_method() !Error {
+        // println("method: " + this.auth_plugin)
         if this.auth_plugin != "mysql_native_password"
         && this.auth_plugin != "caching_sha2_password"
         : throw .unsupported { message: "Unsupported authentication method: %{ this.auth_plugin }" }
-    }
-
-    fn handshake_init() !Error {
-        this.recv() !>
-        let data = this.recvbuf.data.@cast(ptr)
-        //
-        let proto = read_int(data, 1) // Always 10
-        if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
-        data += 1
-        //
-        let version : String = data.@cast(cstring)
-        // println("version: " + version)
-        data += version.length + 1
-        //
-        this.con_id = read_int(data, 4)
-        data += 4
-        // auth-plugin-data-part-1
-        let authp1 = String.make_from_ptr(data, 8)
-        let authp2 = ""
-        data += 8
-        // filler
-        data += 1
-        // capability_flags_1
-        let caps = read_int(data, 2)
-        data += 2
-        // character_set
-        // let charset = read_int(data, 1)
-        data += 1
-        // status_flags
-        // let status_flags = read_int(data, 2)
-        data += 2
-        // capability_flags_2
-        let caps2 = read_int(data, 2)
-        caps = (caps2 << 16) | caps
-        data += 2
-        //
-        let auth_plugin_data_len : uint = 0
-        if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
-            // length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
-            auth_plugin_data_len = read_int(data, 1)
-        } else {
-            // 0x00
-        }
-        data += 1
-        // reserved bytes
-        data += 6
-        if caps & CAP.CLIENT_MYSQL > 0 {
-            // MySQL - filler bytes
-            data += 4
-        } else {
-            // MariaDB - caps part 3
-            let caps3 = read_int(data, 4)
-            caps = (caps3 << 32) | caps
-            data += 4
-        }
-        // auth-plugin-data-part-2
-        if caps & CAP.CLIENT_SECURE_CONNECTION > 0 {
-            // Rest of the plugin provided data (scramble), $len=MAX(12, length of auth-plugin-data - 9)
-            let auth_p2_len : uint = auth_plugin_data_len - 9
-            if auth_p2_len < 12 || auth_plugin_data_len < 9 : auth_p2_len = 12
-            authp2 = String.make_from_ptr(data, auth_p2_len)
-            data += auth_p2_len + 1
-        }
-        //
-        if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
-            // name of the auth_method that the auth_plugin_data belongs to
-            let plugin_name : String = data.@cast(cstring)
-            this.auth_plugin = plugin_name
-            data += plugin_name.bytes + 1
-        }
-
-        // Store capabilities
-        this.scaps = caps
-        this.salt = authp1 + authp2
-
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
-
-        // SSL
-        if caps & CAP.CLIENT_SSL > 0 {
-            // Optional SSL connection (TODO)
-        }
-    }
-
-    fn auth_response() String {
-        let method = this.auth_plugin
-        if method == "mysql_native_password" {
-            let hash = crypto:Sha1{}
-
-            hash.add_string_data(this.password)
-            let hash1 = hash.final()
-
-            hash.reset()
-            hash.add_hash_data(hash1)
-            let hash2 = hash.final()
-
-            hash.reset()
-            hash.add_string_data(this.salt)
-            hash.add_hash_data(hash2)
-            let hash3 = hash.final()
-
-            let auth_response : [u8 x 20] = { 0... }
-            let i : uint = 0
-            while i < 20 {
-                auth_response[i] = hash1[i] ^ hash3[i]
-                i++
-            }
-
-            return String.make_from_ptr(auth_response, 20)
-
-        } else if method == "caching_sha2_password" {
-            let hash = crypto:Sha256{}
-            hash.add_string_data(this.password)
-            let hash1 = hash.final()
-            hash.reset()
-            hash.add_hash_data(hash1)
-            let hash2 = hash.final()
-            hash.reset()
-            hash.add_hash_data(hash2)
-            hash.add_string_data(this.salt)
-            let hash3 = hash.final()
-            let auth_response : [u8 x 32] = { 0... }
-            let i : uint = 0
-            while i < 32 {
-                auth_response[i] = hash1[i] ^ hash3[i]
-                i++
-            }
-            return String.make_from_ptr(auth_response, 32)
-        }
-        panic("Bug: Unhandled MySQL authentication method")
-    }
-
-    fn handshake_response() !Error {
-        // Response
-        let scaps = this.scaps
-        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
-        this.caps = ccaps
-        //
-        let ccharset : u8 = 45 // utf8mb4_general_ci
-        let username = this.username
-        let db = this.db
-        let auth_plugin_name = this.auth_plugin
-        let auth_response = this.auth_response()
-
-        // Write resp
-        let sbuf = this.sendbuf
-        sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + auth_response.length + 1024)
-        let sdata = sbuf.data.@cast(ptr)
-        let send_start = sdata
-        // Client caps
-        write_int(sdata, ccaps, 4)
-        sdata += 4
-        // Max packet size
-        write_int(sdata, 0xFFFFFF, 4)
-        sdata += 4
-        // Charset
-        write_int(sdata, ccharset, 1)
-        sdata += 1
-        // Filler (0x00 bytes)
-        mem:clear(sdata, 23)
-        sdata += 23
-
-        // Username
-        mem:copy(username.data, sdata, username.length)
-        sdata += username.length
-        mem:clear(sdata, 1)
-        sdata += 1
-
-        // Auth response (doesnt work in this request for mariadb)
-        // Len encoded string - new
-        // sdata += write_int_encoded(sdata, auth_response.length)
-        // mem:copy(auth_response.data, sdata, auth_response.length)
-        // sdata += auth_response.length
-        // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
-        // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
-        mem:clear(sdata, 1)
-        sdata += 1
-
-        if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
-            // DB name - null terminated string
-            mem:copy(db.data, sdata, db.length)
-            sdata += db.length
-            mem:clear(sdata, 1)
-            sdata += 1
-        }
-        if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
-            // Auth plugin - null terminated string
-            mem:copy(auth_plugin_name.data, sdata, auth_plugin_name.length)
-            sdata += auth_plugin_name.length
-            mem:clear(sdata, 1)
-            sdata += 1
-        }
-        if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
-            sdata += write_int_encoded(sdata, 0)
-        }
-        if ccaps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
-            write_int(sdata, 0, 1)
-            sdata += 1
-        }
-
-        // Send
-        let len : uint = sdata - send_start
-        sbuf.length += len
-        this.send() !>
-
-        // Resp
-        this.recv() !>
-        this.check_error() !>
     }
 
     fn check_error() !Error {

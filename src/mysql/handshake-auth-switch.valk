@@ -1,0 +1,32 @@
+
+extend Connection {
+
+    fn handshake_auth_switch() bool !Error {
+        let data = this.recvbuf.data.@cast(ptr)
+        let header = read_int(data, 1)
+        if header == 0xFE {
+            // Skip 0xFE byte
+            data += 1
+            // Auth plugin name
+            let auth_plugin : String = data.@cast(cstring)
+            data += auth_plugin.bytes + 1
+            // Read salt
+            let salt : String = data.@cast(cstring)
+            data += salt.bytes + 1
+            //
+            this.auth_plugin = auth_plugin
+            this.salt = salt
+
+            this.check_auth_method() !>
+            let auth_response = this.auth_response()
+            this.sendbuf.append_str(auth_response)
+            // this.sendbuf.append_byte(0)
+
+            this.send() !>
+            this.recv() !>
+            this.check_error() !>
+            return true
+        }
+        return false
+    }
+}

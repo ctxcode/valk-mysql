@@ -5,6 +5,7 @@ test "Query" {
       assert(false)
       return
     }
+
     let name1 = "valk"
     let name2 = "ctx"
     let r : Array[Array[?String]] = .{}
@@ -14,7 +15,11 @@ test "Query" {
       `id` int NOT NULL AUTO_INCREMENT,
       `name` varchar(50) DEFAULT NULL,
       PRIMARY KEY (`id`)
-    )") ! { assert(false) return }
+    )") ! {
+      println(E.message)
+      assert(false)
+      return
+    }
 
     con.run("TRUNCATE TABLE users") ! { assert(false) return }
 

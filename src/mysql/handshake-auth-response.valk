@@ -1,0 +1,53 @@
+
+use valk:crypto
+
+extend Connection {
+
+    fn auth_response() String {
+        let method = this.auth_plugin
+        if method == "mysql_native_password" {
+            let hash = crypto:Sha1{}
+
+            hash.add_string_data(this.password)
+            let hash1 = hash.final()
+
+            hash.reset()
+            hash.add_hash_data(hash1)
+            let hash2 = hash.final()
+
+            hash.reset()
+            hash.add_string_data(this.salt)
+            hash.add_hash_data(hash2)
+            let hash3 = hash.final()
+
+            let auth_response : [u8 x 20] = { 0... }
+            let i : uint = 0
+            while i < 20 {
+                auth_response[i] = hash1[i] ^ hash3[i]
+                i++
+            }
+
+            return String.make_from_ptr(auth_response, 20)
+
+        } else if method == "caching_sha2_password" {
+            let hash = crypto:Sha256{}
+            hash.add_string_data(this.password)
+            let hash1 = hash.final()
+            hash.reset()
+            hash.add_hash_data(hash1)
+            let hash2 = hash.final()
+            hash.reset()
+            hash.add_hash_data(hash2)
+            hash.add_string_data(this.salt)
+            let hash3 = hash.final()
+            let auth_response : [u8 x 32] = { 0... }
+            let i : uint = 0
+            while i < 32 {
+                auth_response[i] = hash1[i] ^ hash3[i]
+                i++
+            }
+            return String.make_from_ptr(auth_response, 32)
+        }
+        panic("Bug: Unhandled MySQL authentication method: " + method)
+    }
+}

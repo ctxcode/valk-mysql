@@ -1,0 +1,35 @@
+
+extend Connection {
+
+    fn handshake_extra_data() bool !Error {
+        let data = this.recvbuf.data.@cast(ptr)
+        let header = read_int(data, 1)
+        if header != 0x01 : return false
+        // Skip 0xFE byte
+        data += 1
+        // Further auth data required
+        if this.auth_plugin == "caching_sha2_password" {
+            let byte = @ptrv(data, u8)
+            if byte == 0x03 {
+                // Fast auth ok, receive ok packet
+                this.recv() !>
+                return true
+            } else if byte == 0x04 {
+                // Fast auth failed, full auth required
+                if this.ssl_enabled {
+                    // Send plain password + 0x00 byte
+                    let sbuf = this.sendbuf
+                    sbuf.minimum_free_space(64)
+                    sbuf.append_str(this.password)
+                    sbuf.append_byte(0)
+                    this.send() !>
+                    this.check_error() !>
+                    // Receive OK
+                    this.recv() !>
+                    return true
+                }
+            }
+        }
+        this.unsupported()
+    }
+}

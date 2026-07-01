@@ -1,0 +1,43 @@
+
+use valk:mem
+
+extend Connection {
+
+    fn enable_ssl() !Error {
+        // Response
+        let scaps = this.scaps
+        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS | CAP.CLIENT_SSL
+        //
+        let ccharset : u8 = 45 // utf8mb4_general_ci
+
+        // Write resp
+        let sbuf = this.sendbuf
+        sbuf.minimum_free_space(64)
+        let sdata = sbuf.data.@cast(ptr)
+        let send_start = sdata
+        // Client caps
+        write_int(sdata, ccaps, 4)
+        sdata += 4
+        // Max packet size
+        write_int(sdata, 0xFFFFFF, 4)
+        sdata += 4
+        // Charset
+        write_int(sdata, ccharset, 1)
+        sdata += 1
+        // Filler (0x00 bytes)
+        mem:clear(sdata, 23)
+        sdata += 23
+
+        let len : uint = sdata - send_start
+        sbuf.length += len
+
+        this.send() !>
+        this.check_error() !>
+
+        // this.con.ssl_connect(this.host) ! throw .connect { message: "Failed to establish SSL connection" }
+        this.con.ssl_connect(this.host) ! {
+            throw .connect { message: "Failed to establish SSL connection: " + this.con.ssl_error }
+        }
+        this.ssl_enabled = true
+    }
+}
