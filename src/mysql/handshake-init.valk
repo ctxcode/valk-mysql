@@ -79,7 +79,6 @@ extend Connection {
 
         // SSL
         if caps & CAP.CLIENT_SSL > 0 {
-            // Optional SSL connection (TODO)
             this.enable_ssl()
         }
     }

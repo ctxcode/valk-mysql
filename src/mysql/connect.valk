@@ -40,6 +40,7 @@ use valk:mem
     auth_plugin: String ("")
     auth_data: String ("")
     salt: String ("")
+    rsa_public_key: ?String
     //
     ssl_enabled: bool (false)
     + debug: bool (false)

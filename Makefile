@@ -3,7 +3,7 @@ vc=valk
 # vc=~/www/valk2/valk
 
 test:
-	$(vc) build ./tests -t -r
+	$(vc) build ./tests -t -r --filter "query"
 example:
 	cd example && vman install && $(vc) build main.valk -r
 
