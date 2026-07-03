@@ -12,26 +12,17 @@ extend Connection {
         let ccharset : u8 = 45 // utf8mb4_general_ci
 
         // Write resp
-        let sbuf = this.sendbuf
-        sbuf.minimum_free_space(64)
-        let sdata = sbuf.data.@cast(ptr)
-        let send_start = sdata
+        let s = this.sender
         // Client caps
-        write_int(sdata, ccaps, 4)
-        sdata += 4
+        s.write_u32(ccaps.to(u32), BE)
         // Max packet size
-        write_int(sdata, 0xFFFFFF, 4)
-        sdata += 4
+        s.write_u32(0xFFFFFF, BE)
         // Charset
-        write_int(sdata, ccharset, 1)
-        sdata += 1
+        s.write_byte(ccharset)
         // Filler (0x00 bytes)
-        mem:clear(sdata, 23)
-        sdata += 23
+        s.fill(0x00, 23)
 
-        let len : uint = sdata - send_start
-        sbuf.length += len
-
+        //
         this.send() !>
         this.check_error() !>
 

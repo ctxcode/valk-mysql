@@ -19,8 +19,6 @@ value BE (false)
         username: user
         password: password
         db: db
-        sendbuf: sendbuf
-        // recvbuf: recvbuf
         reader: recvbuf.create_reader()
         reader_writer: recvbuf.create_writer()
         sender: sendbuf.create_writer()
@@ -43,7 +41,6 @@ value BE (false)
     reader: type:ByteReader
     reader_writer: type:ByteWriter
     // Data out
-    sendbuf: ByteBuffer
     packetbuf: ByteBuffer (.new())
     sender: type:ByteWriter
     //
@@ -142,18 +139,18 @@ value BE (false)
     }
 
     fn send() !Error {
-        let sb = this.sendbuf
+        let s = this.sender
         let pb = this.packetbuf
         let id = this.seqid++
         pb.clear()
         pb.minimum_free_space(4)
-        let len = sb.length
+        let len = s.buf.length
         write_int3(pb.data, len)
         pb.length += 3
         write_int1(pb.data.@offset(pb.length), id)
         pb.length += 1
-        pb.append(sb)
-        sb.clear() // Clear send data
+        pb.append(s.buf)
+        s.clear() // Clear send data
         //
         if this.debug {
             println("SEND: " + id)

@@ -85,3 +85,11 @@ extend type:ByteReader {
         return v
     }
 }
+extend type:ByteWriter {
+    + fn write_int_encoded(v: uint) uint {
+        this.reserve_space(8)
+        let bytes = write_int_encoded(this.buf.data.@offset(this.pos), v)
+        this.skip(bytes)
+        return v
+    }
+}

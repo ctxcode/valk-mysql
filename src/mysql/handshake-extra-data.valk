@@ -26,9 +26,9 @@ extend Connection {
                 // Fast auth failed, full auth required
                 if this.ssl_enabled {
                     // Send plain password + 0x00 byte
-                    let sbuf = this.sendbuf
-                    sbuf.append_str(this.password)
-                    sbuf.append_byte(0)
+                    let s = this.sender
+                    s.write_string(this.password)
+                    s.write_byte(0)
                     this.send() !>
                     // Receive OK
                     this.recv() !>
@@ -38,8 +38,8 @@ extend Connection {
                 // Step 1. Request public key (unless you already have it)
                 let key = this.rsa_public_key
                 if !isset(key) {
-                    let sbuf = this.sendbuf
-                    sbuf.append_byte(0x02)
+                    let s = this.sender
+                    s.write_byte(0x02)
                     this.send() !>
                     // Receive key
                     this.recv() !>
@@ -66,8 +66,8 @@ extend Connection {
                 let res = RSA_public_encrypt(in.length.to(i32), in_data, out.data, rsa, RSA_PKCS1_OAEP_PADDING)
                 if res <= 0 : throw .error { message: "Failed to encrypt password using the mysql RSA public key" }
                 // Step 3. Send encrypted password
-                let sbuf = this.sendbuf
-                sbuf.append_str(out)
+                let s = this.sender
+                s.write_string(out)
                 this.send() !>
                 // Receive OK
                 this.recv() !>

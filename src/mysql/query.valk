@@ -53,15 +53,11 @@ extend Connection {
         // Close statement
         if this.is_statement {
             this.is_statement = false
-            let data : ptr = this.sendbuf.data
-            let start = data
+            let s = this.sender
             // COM_STMT_CLOSE
-            write_int(data, 0x19, 1)
+            s.write_byte(0x19)
             this.seqid = 0
-            data += 1
-            write_int(data, this.statement_id, 4)
-            data += 4
-            this.sendbuf.length += data - start
+            s.write_u32(this.statement_id.to(u32), BE)
             this.send() _
         }
     }
@@ -118,9 +114,9 @@ extend Connection {
     }
 
     fn send_com_query(q: String) !Error {
-        let buf = this.sendbuf
-        buf.append_byte(0x03)
-        buf.append_str(q)
+        let s = this.sender
+        s.write_byte(0x03)
+        s.write_string(q)
         // Send
         this.seqid = 0
         this.send() !>
@@ -129,12 +125,12 @@ extend Connection {
     }
 
     fn prepare(q: String) !Error {
-        let buf = this.sendbuf
+        let s = this.sender
         // COM_STMT_PREPARE
         this.seqid = 0
-        buf.append_byte(0x16)
+        s.write_byte(0x16)
         // EofString
-        buf.append_str(q)
+        s.write_string(q)
         // Send
         this.send() !>
         // Read response
@@ -178,27 +174,23 @@ extend Connection {
         // Prepare
         this.prepare(q) !>
         // Execute
-        let data : ptr = this.sendbuf.data
-        let start = data
+        let s = this.sender
         let param_count = this.prep_param_count
         // COM_STMT_EXECUTE
         this.seqid = 0
-        write_int(data, 0x17, 1)
-        data += 1
+        s.write_byte(0x17)
         // Statement_id
-        write_int(data, this.statement_id, 4)
-        data += 4
+        s.write_u32(this.statement_id.to(u32), BE)
         // Flags
-        write_int(data, CURSOR.NONE, 1)
-        data += 1
+        s.write_byte(CURSOR.NONE.to(u8))
         // iteration_count : always 1
-        write_int(data, 1, 4)
-        data += 4
+        s.write_u32(1, BE)
         // param_count
         // data += write_int_encoded(data, param_count)
         // Null bitmap
         let null_bytec = (param_count + 7) / 8
-        mem:clear(data, null_bytec)
+        s.clear_next_bytes(null_bytec)
+        let null_data = s.buf.data.@offset(s.pos)
         let binds = this.final_binds
         let i : uint = 0
         while i < param_count {
@@ -206,37 +198,30 @@ extend Connection {
             if isset(bind) && !bind.is_null() : continue
             let byte_pos = (i - 1) / 8
             let bit_pos = ((i - 1) % 8).to(u8)
-            let byte = @ptrv(data, u8, byte_pos)
+            let byte = @ptrv(null_data, u8, byte_pos)
             byte = byte | (1 << bit_pos)
-            @ptrv(data, u8, byte_pos) = byte
+            @ptrv(null_data, u8, byte_pos) = byte
         }
-        data += null_bytec
+        s.skip(null_bytec)
         // new_params_bind_flag
-        write_int(data, 1, 1)
-        data += 1
-        //
-        let buf = this.sendbuf
-        buf.length += (data - start)
+        s.write_byte(1)
         //
         each binds as bind, i {
             if !isset(bind) : continue
             if bind.is_null() : continue
             if i == param_count : break
-            //
-            buf.minimum_free_space(128)
 
             if bind.is_bool() {
-                write_int(buf.data.@offset(buf.length), FIELD_TYPE.TINY, 2)
+                s.write_u16(FIELD_TYPE.TINY, BE)
             } else if bind.is_string() {
-                write_int(buf.data.@offset(buf.length), FIELD_TYPE.VAR_STRING, 2)
+                s.write_u16(FIELD_TYPE.VAR_STRING.to(u16), BE)
             } else if bind.is_int() {
-                write_int(buf.data.@offset(buf.length), FIELD_TYPE.LONGLONG, 2)
+                s.write_u16(FIELD_TYPE.LONGLONG.to(u16), BE)
             } else if bind.is_float() {
-                write_int(buf.data.@offset(buf.length), FIELD_TYPE.DOUBLE, 2)
+                s.write_u16(FIELD_TYPE.DOUBLE.to(u16), BE)
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
             }
-            buf.length += 2
         }
         //
         each binds as bind, i {
@@ -244,21 +229,15 @@ extend Connection {
             if bind.is_null() : continue
             if i == param_count : break
             //
-            buf.minimum_free_space(128)
-            //
             if bind.is_bool() {
-                write_int(buf.data.@offset(buf.length), bind.bool_value ? 1 : 0, 1)
-                buf.length += 1
+                s.write_byte(bind.bool_value ? 1 : 0)
             } else if bind.is_string() {
-                buf.length += write_int_encoded(buf.data.@offset(buf.length), bind.string_value.length)
-                buf.minimum_free_space(bind.string_value.length + 128)
-                buf.append_str(bind.string_value)
+                s.write_int_encoded(bind.string_value.length)
+                s.write_string(bind.string_value)
             } else if bind.is_int() {
-                @ptrv(buf.data.@offset(buf.length), int) = bind.int_value
-                buf.length += 8
+                s.write_u64(bind.int_value, BE)
             } else if bind.is_float() {
-                @ptrv(buf.data.@offset(buf.length), f64) = bind.float_value
-                buf.length += 8
+                s.write_f64(bind.float_value, BE)
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
             }

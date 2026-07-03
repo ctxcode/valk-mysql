@@ -16,34 +16,29 @@ extend Connection {
         let auth_response = this.auth_response()
 
         // Write resp
-        let sbuf = this.sendbuf
-        sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + auth_response.length + 1024)
-        let sdata = sbuf.data.@cast(ptr)
-        let send_start = sdata
+        let s = this.sender
+        // sbuf.minimum_free_space(username.length + db.length + auth_plugin_name.length + auth_response.length + 1024)
+        // let sdata = sbuf.data.@cast(ptr)
+        // let send_start = sdata
+
         // Client caps
-        write_int(sdata, ccaps, 4)
-        sdata += 4
+        s.write_u32(ccaps.to(u32), BE)
         // Max packet size
-        write_int(sdata, 0xFFFFFF, 4)
-        sdata += 4
+        s.write_u32(0xFFFFFF, BE)
         // Charset
-        write_int(sdata, ccharset, 1)
-        sdata += 1
+        s.write_byte(ccharset)
         // Filler (0x00 bytes)
-        mem:clear(sdata, 23)
-        sdata += 23
+        s.fill(0x00, 23)
 
         // Username
-        mem:copy(username.data, sdata, username.length)
-        sdata += username.length
-        mem:clear(sdata, 1)
-        sdata += 1
+        s.write_string(username)
+        s.write_byte(0)
 
         // Auth response (doesnt work in this request for mariadb)
         // Len encoded string - new
-        sdata += write_int_encoded(sdata, auth_response.length)
-        mem:copy(auth_response.data, sdata, auth_response.length)
-        sdata += auth_response.length
+        s.write_int_encoded(auth_response.length)
+        s.write_string(auth_response)
+
         // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
         // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
         // mem:clear(sdata, 1)
@@ -51,30 +46,23 @@ extend Connection {
 
         if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
             // DB name - null terminated string
-            mem:copy(db.data, sdata, db.length)
-            sdata += db.length
-            mem:clear(sdata, 1)
-            sdata += 1
+            s.write_string(db)
+            s.write_byte(0)
         }
         if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // Auth plugin - null terminated string
-            // auth_plugin_name = "none"
-            mem:copy(auth_plugin_name.data, sdata, auth_plugin_name.length)
-            sdata += auth_plugin_name.length
-            mem:clear(sdata, 1)
-            sdata += 1
+            s.write_string(auth_plugin_name)
+            s.write_byte(0)
         }
         if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {
-            sdata += write_int_encoded(sdata, 0)
+            // s.write_int_encoded(0)
+            s.write_byte(0)
         }
         if ccaps & CAP.CLIENT_ZSTD_COMPRESSION_ALGORITHM > 0 {
-            write_int(sdata, 0, 1)
-            sdata += 1
+            s.write_byte(0)
         }
 
         // Send
-        let len : uint = sdata - send_start
-        sbuf.length += len
         this.send() !>
 
         // Resp
