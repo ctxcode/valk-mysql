@@ -35,7 +35,6 @@ extend Connection {
         this.send() !>
         this.check_error() !>
 
-        // this.con.ssl_connect(this.host) ! throw .connect { message: "Failed to establish SSL connection" }
         let ssl = net:SSL.new()
         ssl.set_verify(false)
 

@@ -1,11 +1,17 @@
 
+use valk:type
 use valk:net
 use valk:crypto
 use valk:mem
 
+value BE (false)
+
 + fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !Error {
 
     let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
+
+    let sendbuf = ByteBuffer.new()
+    let recvbuf = ByteBuffer.new()
 
     let con = Connection {
         con: sock
@@ -13,6 +19,11 @@ use valk:mem
         username: user
         password: password
         db: db
+        sendbuf: sendbuf
+        // recvbuf: recvbuf
+        reader: recvbuf.create_reader()
+        reader_writer: recvbuf.create_writer()
+        sender: sendbuf.create_writer()
     }
     con.init() !>
     con.password = "" // clear from memory
@@ -27,11 +38,15 @@ use valk:mem
     username: String
     password: String
     db: String
-    //
-    sendbuf: ByteBuffer (.new())
+    // Data in
+    data_in: ByteBuffer (.new())
+    reader: type:ByteReader
+    reader_writer: type:ByteWriter
+    // Data out
+    sendbuf: ByteBuffer
     packetbuf: ByteBuffer (.new())
-    databuf: ByteBuffer (.new())
-    recvbuf: ByteBuffer (.new())
+    sender: type:ByteWriter
+    //
     seqid: u8 (0)
     // Connection info
     con_id : uint (0)
@@ -53,9 +68,9 @@ use valk:mem
         let count = 0
         while true {
             if count++ > 10 : throw .error { message: "Infinite loop bug" }
-            let data = this.recvbuf.data.@cast(ptr)
-            let header = read_int(data, 1)
-            if header == 0 : break
+            let r = this.reader
+            if r.u8() == 0 : break
+            r.back(1)
             // Check error
             this.check_error() !>
             // Check auth switch
@@ -79,29 +94,27 @@ use valk:mem
     }
 
     fn check_error() !Error {
-        let data = this.recvbuf.data.@cast(ptr)
-        let start = data
-        let header = read_int(data, 1)
-        if header != 0xFF : return
-        data += 1
-        // let code = read_int(data, 2)
-        data += 2
-        //
+        let r = this.reader
+        let header = r.u8()
+        if header != 0xFF {
+            r.back(1)
+            return
+        }
+        // Error code
+        r.skip(2)
+
         if this.caps & CAP.CLIENT_PROTOCOL_41 > 0 {
-            // let sql_state_marker = @ptrv(data, u8)
-            data += 1
+            // sql_state_marker
+            r.u8()
             // sql_state
-            data += 5
+            r.skip(5)
         }
 
-        let msglen = this.recvbuf.length - (data - start)
-        let msg : String = String.make_from_ptr(data, msglen)
-
-        throw .error { message: msg }
+        throw .error { message: r.string_all() }
     }
 
     fn recv() !Error {
-        let buf = this.databuf
+        let buf = this.data_in
         let recv_bytes : uint = buf.length
         if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
         if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
@@ -116,13 +129,14 @@ use valk:mem
             recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
         }
         //
-        this.recvbuf.clear()
-        this.recvbuf.append_from_ptr(buf.data.@offset(4), payload_len)
+        this.reader.reset()
+        this.reader_writer.clear()
+        this.reader_writer.write_buffer(buf, payload_len, 4)
         buf.clear_until(payload_len + 4)
         //
         if this.debug {
             println("RECV: " + (this.seqid - 1))
-            this.recvbuf.data.@cast(ptr).print_bytes(this.recvbuf.length)
+            this.reader.buf.data.@cast(ptr).print_bytes(this.reader.buf.length)
             println("------")
         }
     }

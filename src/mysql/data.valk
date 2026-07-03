@@ -1,4 +1,6 @@
 
+use valk:type
+
 fn write_int1(to: ptr, v: uint) {
     write_int(to.@cast(*[u8]), v, 1)
 }
@@ -76,3 +78,10 @@ fn read_int_enc(from: ptr) (uint, uint) {
     return (v, 9)
 }
 
+extend type:ByteReader {
+    + fn read_int_enc() uint {
+        let v, bytes = read_int_enc(this.buf.data.@offset(this.pos))
+        this.skip(bytes)
+        return v
+    }
+}

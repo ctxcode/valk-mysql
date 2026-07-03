@@ -10,14 +10,14 @@ value RSA_PKCS1_OAEP_PADDING (4)
 extend Connection {
 
     fn handshake_extra_data() bool !Error {
-        let data = this.recvbuf.data.@cast(ptr)
-        let header = read_int(data, 1)
-        if header != 0x01 : return false
-        // Skip 0xFE byte
-        data += 1
+        let r = this.reader
+        if r.u8() != 0x01 {
+            r.back(1)
+            return false
+        }
         // Further auth data required
         if this.auth_plugin == "caching_sha2_password" {
-            let byte = @ptrv(data, u8)
+            let byte = r.u8()
             if byte == 0x03 {
                 // Fast auth ok, receive ok packet
                 this.recv() !>
@@ -44,10 +44,8 @@ extend Connection {
                     // Receive key
                     this.recv() !>
                     this.check_error() !>
-                    let data : ptr = this.recvbuf.data
-                    let len = this.recvbuf.length
-                    if @ptrv(data, u8) != 0x01 : throw .error { message: "Invalid RSA key response from the mysql server" }
-                    key = String.make_from_ptr(data + 1, len - 1)
+                    if r.u8() != 0x01 : throw .error { message: "Invalid RSA key response from the mysql server" }
+                    key = r.string_all()
                     this.rsa_public_key = key
                 }
                 // Step 2. Encrypt password

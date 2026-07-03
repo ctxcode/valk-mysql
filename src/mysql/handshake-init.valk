@@ -3,71 +3,60 @@ extend Connection {
 
     fn handshake_init() !Error {
         this.recv() !>
-        let data = this.recvbuf.data.@cast(ptr)
+        let r = this.reader
         //
-        let proto = read_int(data, 1) // Always 10
+        let proto = r.u8() // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
-        data += 1
         //
-        let version : String = data.@cast(cstring)
-        // println("version: " + version)
-        data += version.length + 1
+        let version : String = r.cstring()
         //
-        this.con_id = read_int(data, 4)
-        data += 4
+        this.con_id = r.u32(BE)
         // auth-plugin-data-part-1
-        let authp1 = String.make_from_ptr(data, 8)
+        let authp1 = r.string(8)
         let authp2 = ""
-        data += 8
         // filler
-        data += 1
+        r.skip(1)
         // capability_flags_1
-        let caps = read_int(data, 2)
-        data += 2
+        let caps : uint = r.u16(BE)
         // character_set
-        // let charset = read_int(data, 1)
-        data += 1
+        r.skip(1)
         // status_flags
-        // let status_flags = read_int(data, 2)
-        data += 2
+        r.skip(2)
         // capability_flags_2
-        let caps2 = read_int(data, 2)
+        let caps2 : uint = r.u16(BE)
         caps = (caps2 << 16) | caps
-        data += 2
         //
         let auth_plugin_data_len : uint = 0
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
-            auth_plugin_data_len = read_int(data, 1)
+            auth_plugin_data_len = r.u8()
         } else {
             // 0x00
+            r.skip(1)
         }
-        data += 1
         // reserved bytes
-        data += 6
+        r.skip(6)
         if caps & CAP.CLIENT_MYSQL > 0 {
             // MySQL - filler bytes
-            data += 4
+            r.skip(4)
         } else {
             // MariaDB - caps part 3
-            let caps3 = read_int(data, 4)
+            let caps3 : uint = r.u32(BE)
             caps = (caps3 << 32) | caps
-            data += 4
         }
         // auth-plugin-data-part-2
         if caps & CAP.CLIENT_SECURE_CONNECTION > 0 {
             // Rest of the plugin provided data (scramble), $len=MAX(12, length of auth-plugin-data - 9)
             let auth_p2_len : uint = auth_plugin_data_len - 9
             if auth_p2_len < 12 || auth_plugin_data_len < 9 : auth_p2_len = 12
-            authp2 = String.make_from_ptr(data, auth_p2_len)
-            data += auth_p2_len + 1
+            authp2 = r.string(auth_p2_len)
+            r.skip(1) // Reserved byte
         }
         //
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // name of the auth_method that the auth_plugin_data belongs to
-            let plugin_name : String = data.@cast(cstring)
+            let plugin_name : String = r.cstring()
             this.auth_plugin = plugin_name
-            data += plugin_name.bytes + 1
         }
 
         // Store capabilities

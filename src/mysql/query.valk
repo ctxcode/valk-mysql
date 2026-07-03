@@ -29,10 +29,9 @@ extend Connection {
             this.send_com_query(q) !>
         }
         //
-        let data : ptr = this.recvbuf.data
-        let colcount, bytes = read_int_enc(data)
+        let r = this.reader
+        let colcount = r.read_int_enc()
         this.col_count = colcount
-        data += bytes
 
         // Nothing to fetch
         if colcount == 0 : return
@@ -68,6 +67,7 @@ extend Connection {
     }
 
     fn read_column_data() !Error {
+        let r = this.reader
         let names = this.column_names
         let types = this.column_types
         names.clear()
@@ -78,52 +78,42 @@ extend Connection {
         while i++ < col_count {
             this.recv() ! throw .error
             this.check_error() ! throw .error
-            let data : ptr = this.recvbuf.data
             // catalog (def)
-            let strlen, bytes = read_int_enc(data)
-            data += bytes
-            data += strlen
+            let strlen = r.read_int_enc()
+            r.skip(strlen)
             // schema
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
-            data += strlen
+            strlen = r.read_int_enc()
+            r.skip(strlen)
             // table
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
-            data += strlen
+            strlen = r.read_int_enc()
+            r.skip(strlen)
             // org_table
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
-            data += strlen
+            strlen = r.read_int_enc()
+            r.skip(strlen)
             // col name
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
-            let col_name = String.make_from_ptr(data, strlen)
+            strlen = r.read_int_enc()
+            let col_name = r.string(strlen)
             this.column_names.append(col_name)
-            data += strlen
             // col org_name
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
-            data += strlen
+            strlen = r.read_int_enc()
+            r.skip(strlen)
             // length of fixed length fields
-            (strlen, bytes) = read_int_enc(data)
-            data += bytes
+            strlen = r.read_int_enc()
             // charset
             // let charset = read_int(data, 2)
-            data += 2
+            r.skip(2)
             // column_length
-            data += 4
+            r.skip(4)
             // type
-            let type = read_int(data, 1)
+            let type = r.u8()
             // println("TYPE: " + type)
             this.column_types.append(type)
-            data += 1
             // flags
-            data += 2
+            r.skip(2)
             // decimals
-            data += 1
+            r.skip(1)
             // reserved
-            data += 2
+            r.skip(2)
         }
     }
 
@@ -151,20 +141,17 @@ extend Connection {
         this.recv() !>
         this.check_error() !>
         //
-        let data : ptr = this.recvbuf.data
+        let r = this.reader
         // let header = read_int(data, 1)
-        data += 1
+        r.skip(1)
         // Statement ID
-        this.statement_id = read_int(data, 4)
-        data += 4
+        this.statement_id = r.u32(BE)
         // Col count
-        this.prep_column_count = read_int(data, 2)
-        data += 2
+        this.prep_column_count = r.u16(BE)
         // Param count
-        this.prep_param_count = read_int(data, 2)
-        data += 2
+        this.prep_param_count = r.u16(BE)
         // Filler
-        data += 1
+        r.skip(1)
         //
 
         // Meta data packets
@@ -284,14 +271,12 @@ extend Connection {
     }
 
     fn flush_result() !Error {
+        let r = this.reader
         if !this.fetching : return
         while true {
             this.recv() !>
             this.check_error() !>
-            let header = read_int(this.recvbuf.data, 1)
-            if header == 0xFE {
-                break
-            }
+            if r.u8() == 0xFE : break
         }
     }
 
@@ -311,13 +296,13 @@ extend Connection {
         // Next result
         this.recv() !>
         this.check_error() !>
-        let data : ptr = this.recvbuf.data
-        let header = read_int(data, 1)
-        if header == 0xFE {
+        let r = this.reader
+        if r.u8() == 0xFE {
             this.fetching = false
             this.stop_query()
             return false
         }
+        r.back(1)
 
         if this.is_statement {
             return this.fetch_binary_resultset(row) !>
@@ -341,12 +326,13 @@ extend Connection {
 
     fn fetch_binary_resultset(row: Array[?String]) bool !Error {
         row.clear()
-        let data : ptr = this.recvbuf.data
-        data += 1 // skip 0x00 header byte
-        let null_data = data
+        let r = this.reader
+        r.skip(1) // Skip header byte (0x00)
+        // Null data
+        let null_data = this.reader.buf.data.@offset(this.reader.pos)
         let col_count = this.col_count
         let null_bytec = (col_count + 7) / 8
-        data += null_bytec
+        r.skip(null_bytec)
         //
         let i : uint = 0
         while i < col_count {
@@ -363,18 +349,14 @@ extend Connection {
             }
             //
             if type == FIELD_TYPE.LONG {
-                let v = @ptrv(data, i32, 0)
+                let v = r.i32(BE)
                 row.append(v)
-                data += 4
             } else if type == FIELD_TYPE.LONGLONG {
-                let v = @ptrv(data, i64, 0)
+                let v = r.i64(BE)
                 row.append(v)
-                data += 8
             } else if type == FIELD_TYPE.VAR_STRING {
-                let strlen, bytes = read_int_enc(data)
-                data += bytes
-                let str = String.make_from_ptr(data, strlen)
-                data += strlen
+                let strlen = r.read_int_enc()
+                let str = r.string(strlen)
                 row.append(str)
             } else {
                 throw .error { message: "Bug: Unhandled mysql type: " + type }
@@ -384,20 +366,18 @@ extend Connection {
     }
 
     fn fetch_text_resultset(row: Array[?String]) bool !Error {
-        let data : ptr = this.recvbuf.data
+        let r = this.reader
         //
         let x = this.col_count
         while x-- > 0 {
-            let len, bytes = read_int_enc(data)
-            data += bytes
+            let len = r.read_int_enc()
             // Is null check
             if len == 0xFB {
                 row.append(null)
                 continue
             }
             // String data
-            let str = String.make_from_ptr(data, len)
-            data += len
+            let str = r.string(len)
             row.append(str)
         }
         return true
