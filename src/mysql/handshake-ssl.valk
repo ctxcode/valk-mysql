@@ -1,5 +1,6 @@
 
 use valk:mem
+use valk:net
 
 extend Connection {
 
@@ -35,8 +36,11 @@ extend Connection {
         this.check_error() !>
 
         // this.con.ssl_connect(this.host) ! throw .connect { message: "Failed to establish SSL connection" }
-        this.con.ssl_connect(this.host) ! {
-            throw .connect { message: "Failed to establish SSL connection: " + this.con.ssl_error }
+        let ssl = net:SSL.new()
+        ssl.set_verify(false)
+
+        this.con.ssl_connect(ssl) ! {
+            throw .connect { message: "Failed to establish SSL connection: " + ssl.get_error_message() }
         }
         this.ssl_enabled = true
     }
