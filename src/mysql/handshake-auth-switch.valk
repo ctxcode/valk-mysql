@@ -3,7 +3,7 @@ extend Connection {
 
     fn handshake_auth_switch() bool !Error {
         let r = this.reader
-        let h = r.u8()
+        let h = r.read_byte()
         if h != 0xFE {
             r.back(1)
             return false

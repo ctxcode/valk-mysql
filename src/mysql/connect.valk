@@ -4,14 +4,9 @@ use valk:net
 use valk:crypto
 use valk:mem
 
-value BE (false)
-
 + fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !Error {
 
     let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
-
-    let sendbuf = ByteBuffer.new()
-    let recvbuf = ByteBuffer.new()
 
     let con = Connection {
         con: sock
@@ -19,9 +14,7 @@ value BE (false)
         username: user
         password: password
         db: db
-        reader: recvbuf.create_reader()
-        reader_writer: recvbuf.create_writer()
-        sender: sendbuf.create_writer()
+        reader: type:ByteReader.new(.new())
     }
     con.init() !>
     con.password = "" // clear from memory
@@ -39,10 +32,9 @@ value BE (false)
     // Data in
     data_in: ByteBuffer (.new())
     reader: type:ByteReader
-    reader_writer: type:ByteWriter
     // Data out
     packetbuf: ByteBuffer (.new())
-    sender: type:ByteWriter
+    sender: ByteBuffer (.new())
     //
     seqid: u8 (0)
     // Connection info
@@ -66,7 +58,7 @@ value BE (false)
         while true {
             if count++ > 10 : throw .error { message: "Infinite loop bug" }
             let r = this.reader
-            if r.u8() == 0 : break
+            if r.read_byte() == 0 : break
             r.back(1)
             // Check error
             this.check_error() !>
@@ -92,7 +84,7 @@ value BE (false)
 
     fn check_error() !Error {
         let r = this.reader
-        let header = r.u8()
+        let header = r.read_byte()
         if header != 0xFF {
             r.back(1)
             return
@@ -102,7 +94,7 @@ value BE (false)
 
         if this.caps & CAP.CLIENT_PROTOCOL_41 > 0 {
             // sql_state_marker
-            r.u8()
+            r.read_byte()
             // sql_state
             r.skip(5)
         }
@@ -127,8 +119,8 @@ value BE (false)
         }
         //
         this.reader.reset()
-        this.reader_writer.clear()
-        this.reader_writer.write_buffer(buf, payload_len, 4)
+        this.reader.buf.clear()
+        this.reader.buf.write_buffer_part(buf, payload_len, 4)
         buf.clear_until(payload_len + 4)
         //
         if this.debug {
@@ -143,13 +135,13 @@ value BE (false)
         let pb = this.packetbuf
         let id = this.seqid++
         pb.clear()
-        pb.minimum_free_space(4)
-        let len = s.buf.length
+        pb.reserve_space(4)
+        let len = s.length
         write_int3(pb.data, len)
         pb.length += 3
         write_int1(pb.data.@offset(pb.length), id)
         pb.length += 1
-        pb.append(s.buf)
+        pb.write_buffer(s)
         s.clear() // Clear send data
         //
         if this.debug {

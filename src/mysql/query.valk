@@ -57,7 +57,7 @@ extend Connection {
             // COM_STMT_CLOSE
             s.write_byte(0x19)
             this.seqid = 0
-            s.write_u32(this.statement_id.to(u32), BE)
+            s.write_u32_le(this.statement_id.to(u32))
             this.send() _
         }
     }
@@ -101,7 +101,7 @@ extend Connection {
             // column_length
             r.skip(4)
             // type
-            let type = r.u8()
+            let type = r.read_byte()
             // println("TYPE: " + type)
             this.column_types.append(type)
             // flags
@@ -141,11 +141,11 @@ extend Connection {
         // let header = read_int(data, 1)
         r.skip(1)
         // Statement ID
-        this.statement_id = r.u32(BE)
+        this.statement_id = r.read_u32_le()
         // Col count
-        this.prep_column_count = r.u16(BE)
+        this.prep_column_count = r.read_u16_le()
         // Param count
-        this.prep_param_count = r.u16(BE)
+        this.prep_param_count = r.read_u16_le()
         // Filler
         r.skip(1)
         //
@@ -180,17 +180,17 @@ extend Connection {
         this.seqid = 0
         s.write_byte(0x17)
         // Statement_id
-        s.write_u32(this.statement_id.to(u32), BE)
+        s.write_u32_le(this.statement_id.to(u32))
         // Flags
         s.write_byte(CURSOR.NONE.to(u8))
         // iteration_count : always 1
-        s.write_u32(1, BE)
+        s.write_u32_le(1)
         // param_count
         // data += write_int_encoded(data, param_count)
         // Null bitmap
         let null_bytec = (param_count + 7) / 8
         s.clear_next_bytes(null_bytec)
-        let null_data = s.buf.data.@offset(s.pos)
+        let null_data = s.data.@offset(s.length)
         let binds = this.final_binds
         let i : uint = 0
         while i < param_count {
@@ -212,13 +212,13 @@ extend Connection {
             if i == param_count : break
 
             if bind.is_bool() {
-                s.write_u16(FIELD_TYPE.TINY, BE)
+                s.write_u16_le(FIELD_TYPE.TINY)
             } else if bind.is_string() {
-                s.write_u16(FIELD_TYPE.VAR_STRING.to(u16), BE)
+                s.write_u16_le(FIELD_TYPE.VAR_STRING.to(u16))
             } else if bind.is_int() {
-                s.write_u16(FIELD_TYPE.LONGLONG.to(u16), BE)
+                s.write_u16_le(FIELD_TYPE.LONGLONG.to(u16))
             } else if bind.is_float() {
-                s.write_u16(FIELD_TYPE.DOUBLE.to(u16), BE)
+                s.write_u16_le(FIELD_TYPE.DOUBLE.to(u16))
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
             }
@@ -235,9 +235,9 @@ extend Connection {
                 s.write_int_encoded(bind.string_value.length)
                 s.write_string(bind.string_value)
             } else if bind.is_int() {
-                s.write_u64(bind.int_value, BE)
+                s.write_u64_le(bind.int_value)
             } else if bind.is_float() {
-                s.write_f64(bind.float_value, BE)
+                s.write_f64_le(bind.float_value)
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
             }
@@ -255,7 +255,7 @@ extend Connection {
         while true {
             this.recv() !>
             this.check_error() !>
-            if r.u8() == 0xFE : break
+            if r.read_byte() == 0xFE : break
         }
     }
 
@@ -276,7 +276,7 @@ extend Connection {
         this.recv() !>
         this.check_error() !>
         let r = this.reader
-        if r.u8() == 0xFE {
+        if r.read_byte() == 0xFE {
             this.fetching = false
             this.stop_query()
             return false
@@ -328,10 +328,10 @@ extend Connection {
             }
             //
             if type == FIELD_TYPE.LONG {
-                let v = r.i32(BE)
+                let v = r.read_u32_le()
                 row.append(v)
             } else if type == FIELD_TYPE.LONGLONG {
-                let v = r.i64(BE)
+                let v = r.read_u64_le()
                 row.append(v)
             } else if type == FIELD_TYPE.VAR_STRING {
                 let strlen = r.read_int_enc()

@@ -5,31 +5,31 @@ extend Connection {
         this.recv() !>
         let r = this.reader
         //
-        let proto = r.u8() // Always 10
+        let proto = r.read_byte() // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
         //
         let version : String = r.cstring()
         //
-        this.con_id = r.u32(BE)
+        this.con_id = r.read_u32_le()
         // auth-plugin-data-part-1
         let authp1 = r.string(8)
         let authp2 = ""
         // filler
         r.skip(1)
         // capability_flags_1
-        let caps : uint = r.u16(BE)
+        let caps : uint = r.read_u16_le()
         // character_set
         r.skip(1)
         // status_flags
         r.skip(2)
         // capability_flags_2
-        let caps2 : uint = r.u16(BE)
+        let caps2 : uint = r.read_u16_le()
         caps = (caps2 << 16) | caps
         //
         let auth_plugin_data_len : uint = 0
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
-            auth_plugin_data_len = r.u8()
+            auth_plugin_data_len = r.read_byte()
         } else {
             // 0x00
             r.skip(1)
@@ -41,7 +41,7 @@ extend Connection {
             r.skip(4)
         } else {
             // MariaDB - caps part 3
-            let caps3 : uint = r.u32(BE)
+            let caps3 : uint = r.read_u32_le()
             caps = (caps3 << 32) | caps
         }
         // auth-plugin-data-part-2

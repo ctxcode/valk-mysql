@@ -14,9 +14,9 @@ extend Connection {
         // Write resp
         let s = this.sender
         // Client caps
-        s.write_u32(ccaps.to(u32), BE)
+        s.write_u32_le(ccaps.to(u32))
         // Max packet size
-        s.write_u32(0xFFFFFF, BE)
+        s.write_u32_le(0xFFFFFF)
         // Charset
         s.write_byte(ccharset)
         // Filler (0x00 bytes)
