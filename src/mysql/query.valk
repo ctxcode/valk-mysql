@@ -88,7 +88,7 @@ extend Connection {
             r.skip(strlen)
             // col name
             strlen = r.read_int_enc()
-            let col_name = r.string(strlen)
+            let col_name = r.read_string(strlen)
             this.column_names.append(col_name)
             // col org_name
             strlen = r.read_int_enc()
@@ -335,7 +335,7 @@ extend Connection {
                 row.append(v)
             } else if type == FIELD_TYPE.VAR_STRING {
                 let strlen = r.read_int_enc()
-                let str = r.string(strlen)
+                let str = r.read_string(strlen)
                 row.append(str)
             } else {
                 throw .error { message: "Bug: Unhandled mysql type: " + type }
@@ -356,7 +356,7 @@ extend Connection {
                 continue
             }
             // String data
-            let str = r.string(len)
+            let str = r.read_string(len)
             row.append(str)
         }
         return true

@@ -99,7 +99,7 @@ use valk:mem
             r.skip(5)
         }
 
-        throw .error { message: r.string_all() }
+        throw .error { message: r.read_string_all() }
     }
 
     fn recv() !Error {

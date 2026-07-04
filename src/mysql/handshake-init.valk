@@ -8,11 +8,11 @@ extend Connection {
         let proto = r.read_byte() // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
         //
-        let version : String = r.cstring()
+        let version : String = r.read_cstring()
         //
         this.con_id = r.read_u32_le()
         // auth-plugin-data-part-1
-        let authp1 = r.string(8)
+        let authp1 = r.read_string(8)
         let authp2 = ""
         // filler
         r.skip(1)
@@ -49,13 +49,13 @@ extend Connection {
             // Rest of the plugin provided data (scramble), $len=MAX(12, length of auth-plugin-data - 9)
             let auth_p2_len : uint = auth_plugin_data_len - 9
             if auth_p2_len < 12 || auth_plugin_data_len < 9 : auth_p2_len = 12
-            authp2 = r.string(auth_p2_len)
+            authp2 = r.read_string(auth_p2_len)
             r.skip(1) // Reserved byte
         }
         //
         if caps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // name of the auth_method that the auth_plugin_data belongs to
-            let plugin_name : String = r.cstring()
+            let plugin_name : String = r.read_cstring()
             this.auth_plugin = plugin_name
         }
 

@@ -45,7 +45,7 @@ extend Connection {
                     this.recv() !>
                     this.check_error() !>
                     if r.read_byte() != 0x01 : throw .error { message: "Invalid RSA key response from the mysql server" }
-                    key = r.string_all()
+                    key = r.read_string_all()
                     this.rsa_public_key = key
                 }
                 // Step 2. Encrypt password

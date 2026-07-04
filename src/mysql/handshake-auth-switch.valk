@@ -9,9 +9,9 @@ extend Connection {
             return false
         }
         // Auth plugin name
-        let auth_plugin : String = r.cstring()
+        let auth_plugin : String = r.read_cstring()
         // Read salt
-        let salt : String = r.cstring()
+        let salt : String = r.read_cstring()
         //
         this.auth_plugin = auth_plugin
         this.salt = salt
