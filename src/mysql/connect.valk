@@ -1,5 +1,4 @@
 
-use valk:type
 use valk:net
 use valk:crypto
 use valk:mem
@@ -14,7 +13,7 @@ use valk:mem
         username: user
         password: password
         db: db
-        reader: type:ByteReader.new(.new())
+        reader: ByteReader.new(.new())
     }
     con.init() !>
     con.password = "" // clear from memory
@@ -31,7 +30,7 @@ use valk:mem
     db: String
     // Data in
     data_in: ByteBuffer (.new())
-    reader: type:ByteReader
+    reader: ByteReader
     // Data out
     packetbuf: ByteBuffer (.new())
     sender: ByteBuffer (.new())

@@ -1,6 +1,6 @@
 
 use valk:json
-use valk:type
+use valk:core
 
 extend Connection {
     binds: Array[?json:Value] (.{})
@@ -18,7 +18,7 @@ extend Connection {
     }
 
     + fn replace_named_params(query: String) String !Error {
-        let r = type:StringComposer.new()
+        let r = core:StringComposer.new()
         let str_mode = false
         let ignore_next = false
         let binds = this.binds
