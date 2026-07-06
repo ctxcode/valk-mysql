@@ -1,5 +1,4 @@
 
-use valk:mem
 use valk:net
 
 extend Connection {

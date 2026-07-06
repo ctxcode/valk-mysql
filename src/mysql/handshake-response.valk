@@ -1,6 +1,4 @@
 
-use valk:mem
-
 extend Connection {
 
     fn handshake_response() !Error {
@@ -34,15 +32,15 @@ extend Connection {
         s.write_string(username)
         s.write_byte(0)
 
-        // Auth response (doesnt work in this request for mariadb)
-        // Len encoded string - new
-        s.write_int_encoded(auth_response.length)
-        s.write_string(auth_response)
-
-        // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
-        // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
-        // mem:clear(sdata, 1)
-        // sdata += 1
+        // Auth response (doesnt work for mariadb)
+        if scaps & CAP.CLIENT_MYSQL > 0 {
+            s.write_int_encoded(auth_response.length)
+            s.write_string(auth_response)
+        } else {
+            // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
+            // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
+            s.write_byte(0)
+        }
 
         if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
             // DB name - null terminated string

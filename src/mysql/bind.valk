@@ -18,7 +18,7 @@ extend Connection {
     }
 
     + fn replace_named_params(query: String) String !Error {
-        let r = core:StringComposer.new()
+        let r = core:ByteBuffer.new()
         let str_mode = false
         let ignore_next = false
         let binds = this.binds
@@ -27,7 +27,7 @@ extend Connection {
 
         each query as ch, i {
             if str_mode {
-                r.append_byte(ch)
+                r.write_byte(ch)
                 if ignore_next {
                     ignore_next = false
                     continue
@@ -55,13 +55,11 @@ extend Connection {
                     if isset(bindv) {
                         if bindv.is_array() {
                             each bindv.array() as val, i {
-                                if i > 0 : r.append_byte(',')
-                                r.append_byte('?')
-                                final_binds.append(val)
+                                if i > 0 : r.write_byte(',')
+                                this.insert_bind_value(r, val)
                             }
                         } else {
-                            r.append_byte('?')
-                            final_binds.append(bindv)
+                            this.insert_bind_value(r, bindv)
                         }
                     }
                     i += len
@@ -69,13 +67,43 @@ extend Connection {
                 }
             } else if ch == '?' {
                 let val = binds.get(bindi++) ! throw .error { message: "You have more '?' tokens than the amount of binded values" }
-                final_binds.append(val)
+                this.insert_bind_value(r, val)
+                continue
             } else if ch == '"' {
                 str_mode = true
             }
-            r.append_byte(ch)
+            r.write_byte(ch)
         }
 
         return r.to_string()
+    }
+
+    fn insert_bind_value(q: ByteBuffer, v: ?json:Value) {
+        if isset(v) {
+            let inline = false
+            if v.is_int() {
+                q.write_int_ascii(v.int_value)
+                return
+            } else if v.is_bool() {
+                q.write_string(v.bool_value ? "true" : "false")
+                return
+            } else if v.is_string() {
+                let valid = true
+                each v.string_value as ch {
+                    if ch < 32 || ch > 126 || ch == '"' || ch == '\'' || ch == '\\' {
+                        valid = false
+                        break
+                    }
+                }
+                if valid {
+                    q.write_byte('"')
+                    q.write_string(v.string_value)
+                    q.write_byte('"')
+                    return
+                }
+            }
+        }
+        this.final_binds.append(v)
+        q.write_byte('?')
     }
 }

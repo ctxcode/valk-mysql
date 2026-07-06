@@ -1,6 +1,4 @@
 
-use valk:mem
-
 extend Connection {
     column_types: Array[uint] (.{})
     column_names: Array[String] (.{})
@@ -16,11 +14,16 @@ extend Connection {
         if this.in_progress : this.stop_query()
         //
         this.in_progress = true
-        this.is_statement = (this.binds.length + this.named_binds.length) > 0
+
+        // Replace bindings
+        if (this.binds.length + this.named_binds.length) > 0 {
+            q = this.replace_named_params(q) !>
+        }
+
+        this.is_statement = this.final_binds.length > 0
         //
         if this.is_statement {
             //
-            q = this.replace_named_params(q) !>
             this.binds.clear()
             this.named_binds.clear()
             //

@@ -1,7 +1,5 @@
 
 use valk:net
-use valk:crypto
-use valk:mem
 
 + fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !Error {
 
