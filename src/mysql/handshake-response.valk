@@ -3,13 +3,13 @@ extend Connection {
 
     fn handshake_response() !Error {
         // Response
+        let db = this.db
+        let username = this.username
         let scaps = this.scaps
-        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
-        this.caps = ccaps
+        let ccaps = this.get_caps()
+        if isset(db) : ccaps |= CAP.CLIENT_CONNECT_WITH_DB
         //
         let ccharset : u8 = 45 // utf8mb4_general_ci
-        let username = this.username
-        let db = this.db
         let auth_plugin_name = this.auth_plugin
         let auth_response = this.auth_response()
 
@@ -42,7 +42,7 @@ extend Connection {
             s.write_byte(0)
         }
 
-        if ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
+        if isset(db) && ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
             // DB name - null terminated string
             s.write_string(db)
             s.write_byte(0)

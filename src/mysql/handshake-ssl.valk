@@ -6,7 +6,8 @@ extend Connection {
     fn enable_ssl() !Error {
         // Response
         let scaps = this.scaps
-        let ccaps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_CONNECT_WITH_DB | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS | CAP.CLIENT_SSL
+        let ccaps = this.get_caps()
+        ccaps |=  CAP.CLIENT_SSL
         //
         let ccharset : u8 = 45 // utf8mb4_general_ci
 

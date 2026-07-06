@@ -1,7 +1,7 @@
 
 use valk:net
 
-+ fn connect(host: String, user: String, password: String, db: String, port: u32) Connection !Error {
++ fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error {
 
     let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
@@ -25,7 +25,7 @@ use valk:net
     host: String
     username: String
     password: String
-    db: String
+    db: ?String
     // Data in
     data_in: ByteBuffer (.new())
     reader: ByteReader
@@ -45,6 +45,7 @@ use valk:net
     //
     ssl_enabled: bool (false)
     + debug: bool (false)
+    ~ closed: bool (false)
     //
 
     fn init() !Error {
@@ -148,5 +149,19 @@ use valk:net
         }
         //
         this.con.send_buffer(pb, 0, true) ! throw .error { message: "Failed to send bytes to server" }
+    }
+
+    fn get_caps() u64 {
+        let caps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
+        this.caps = caps
+        if isset(this.db) : caps |= CAP.CLIENT_CONNECT_WITH_DB
+        if isset(this.ssl_enabled) : caps |= CAP.CLIENT_SSL
+        return caps
+    }
+
+    + fn close() {
+        if this.closed : return
+        this.closed = true
+        this.con.close()
     }
 }

@@ -28,7 +28,11 @@ test "Basics" {
     //
     let start = time:microtime()
     con.bind("name", name1)
-    con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+    con.run("INSERT INTO users (name) VALUES (:name)") ! {
+      println(E.message)
+      assert(false)
+      return
+    }
 
     assert(((time:microtime() - start) / 1000) < 40)
     start = time:microtime()
