@@ -11,22 +11,35 @@ test "Multi Statement" {
     let sql = #embed("multi.sql")
     con.run(sql) ! { assert(false) return }
 
+    // Invalid query
     let fail = false
     con.run("INSERX INTO t1 (name) VALUES (\"v1\")") ! {
       fail = true
     }
     assert(fail == true)
-    con.run("INSERT INTO t2 (name) VALUES (\"v2\")") ! assert(false)
 
-    con.run("SELECT * FROM t2") ! assert(false)
+    // Add data
+    con.run("
+    INSERT INTO t1 (name) VALUES (\"v1\");
+    INSERT INTO t1 (name) VALUES (\"v2\");
+    INSERT INTO t1 (name) VALUES (\"v3\");
+    ") ! assert(false)
+
+    // Select
+    con.run("SELECT * FROM t1") ! assert(false)
     let r1 = con.fetch_all() ! {
       assert(false)
       return
     }
-    assert(r1.length == 1)
+    assert(r1.length == 3)
     r1.get(0) -> v {
       assert(v.length == 2) // columns
       v.get(0) -> cv : assert(cv == "1")
-      v.get(1) -> cv : assert(cv == "v2")
+      v.get(1) -> cv : assert(cv == "v1")
+    }
+    r1.get(2) -> v {
+      assert(v.length == 2) // columns
+      v.get(0) -> cv : assert(cv == "3")
+      v.get(1) -> cv : assert(cv == "v3")
     }
 }

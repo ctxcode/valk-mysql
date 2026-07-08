@@ -7,6 +7,7 @@ extend Connection {
     named_binds: Map[?json:Value] (.{})
     bind_data: ByteBuffer (.new())
     final_binds: Array[?json:Value] (.{})
+    disable_inline_binds: bool (false)
 
     + fn bind(name: String, value: $T) {
         let v = json:value(value)
@@ -24,6 +25,7 @@ extend Connection {
         let binds = this.binds
         let final_binds = this.final_binds
         let bindi : uint = 0
+        this.disable_inline_binds = query.contains(";")
 
         each query as ch, i {
             if str_mode {
@@ -79,7 +81,8 @@ extend Connection {
     }
 
     fn insert_bind_value(q: ByteBuffer, v: ?json:Value) {
-        if isset(v) {
+
+        if isset(v) && !this.disable_inline_binds {
             let inline = false
             if v.is_int() {
                 q.write_int_ascii(v.int_value)
@@ -90,7 +93,7 @@ extend Connection {
             } else if v.is_string() {
                 let valid = true
                 each v.string_value as ch {
-                    if ch < 32 || ch > 126 || ch == '"' || ch == '\'' || ch == '\\' {
+                    if ch < 32 || ch > 126 || ch == '"' || ch == '\'' || ch == '\\' || ch == '?' {
                         valid = false
                         break
                     }
