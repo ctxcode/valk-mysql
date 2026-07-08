@@ -9,6 +9,7 @@ extend Connection {
     fetching: bool (false)
     is_statement: bool (false)
     in_progress : bool (false)
+    columns_known : bool (false)
 
     + fn run(q: String) !Error {
         if this.in_progress : this.stop_query()
@@ -18,31 +19,25 @@ extend Connection {
         // Replace bindings
         if (this.binds.length + this.named_binds.length) > 0 {
             q = this.replace_named_params(q) !>
+            this.clear_binds()
         }
 
         this.is_statement = this.final_binds.length > 0
         //
+        if this.debug : println("Run: " + q)
         if this.is_statement {
-            //
-            this.binds.clear()
-            this.named_binds.clear()
-            //
             this.send_prep_query(q) !>
         } else {
             this.send_com_query(q) !>
         }
-        //
-        let r = this.reader
-        let colcount = r.read_int_enc()
-        this.col_count = colcount
-
-        // Nothing to fetch
-        if colcount == 0 : return
-
-        // Read columns
-        this.read_column_data() !>
 
         this.fetching = true
+        this.check_result_set()
+    }
+
+    + fn clear_binds() {
+        this.binds.clear()
+        this.named_binds.clear()
     }
 
     fn stop_query() {
@@ -66,7 +61,6 @@ extend Connection {
     }
 
     fn read_column_data() !Error {
-        let r = this.reader
         let names = this.column_names
         let types = this.column_types
         names.clear()
@@ -75,45 +69,58 @@ extend Connection {
         let i : uint = 0
         let col_count = this.col_count
         while i++ < col_count {
-            this.recv() ! throw .error
-            this.check_error() ! throw .error
-            // catalog (def)
-            let strlen = r.read_int_enc()
-            r.skip(strlen)
-            // schema
-            strlen = r.read_int_enc()
-            r.skip(strlen)
-            // table
-            strlen = r.read_int_enc()
-            r.skip(strlen)
-            // org_table
-            strlen = r.read_int_enc()
-            r.skip(strlen)
-            // col name
-            strlen = r.read_int_enc()
-            let col_name = r.read_string(strlen)
+            let col_name, type = this.read_column() !>
             this.column_names.append(col_name)
-            // col org_name
-            strlen = r.read_int_enc()
-            r.skip(strlen)
-            // length of fixed length fields
-            strlen = r.read_int_enc()
-            // charset
-            // let charset = read_int(data, 2)
-            r.skip(2)
-            // column_length
-            r.skip(4)
-            // type
-            let type = r.read_byte()
-            // println("TYPE: " + type)
             this.column_types.append(type)
-            // flags
-            r.skip(2)
-            // decimals
-            r.skip(1)
-            // reserved
-            r.skip(2)
         }
+    }
+
+    fn read_prepare_param_data() !Error {
+        let i : uint = 0
+        let count = this.prep_param_count
+        while i++ < count {
+            let col_name, type = this.read_column() !>
+        }
+    }
+
+    fn read_column() (String, u8) !Error {
+        let r = this.reader
+        this.recv() ! throw .error
+        this.check_error() ! throw .error
+        // catalog (def)
+        let strlen = r.read_int_enc()
+        r.skip(strlen)
+        // schema
+        strlen = r.read_int_enc()
+        r.skip(strlen)
+        // table
+        strlen = r.read_int_enc()
+        r.skip(strlen)
+        // org_table
+        strlen = r.read_int_enc()
+        r.skip(strlen)
+        // col name
+        strlen = r.read_int_enc()
+        let col_name = r.read_string(strlen)
+        // col org_name
+        strlen = r.read_int_enc()
+        r.skip(strlen)
+        // length of fixed length fields
+        strlen = r.read_int_enc()
+        // charset
+        // let charset = read_int(data, 2)
+        r.skip(2)
+        // column_length
+        r.skip(4)
+        // type
+        let type = r.read_byte()
+        // flags
+        r.skip(2)
+        // decimals
+        r.skip(1)
+        // reserved
+        r.skip(2)
+        return (col_name, type)
     }
 
     fn send_com_query(q: String) !Error {
@@ -123,8 +130,6 @@ extend Connection {
         // Send
         this.seqid = 0
         this.send() !>
-        this.recv() !>
-        this.check_error() !>
     }
 
     fn prepare(q: String) !Error {
@@ -146,31 +151,19 @@ extend Connection {
         // Statement ID
         this.statement_id = r.read_u32_le()
         // Col count
-        this.prep_column_count = r.read_u16_le()
+        this.col_count = r.read_u16_le()
         // Param count
         this.prep_param_count = r.read_u16_le()
         // Filler
         r.skip(1)
-        //
+        // Warnings
+        if r.buf.length > 12 {
+            let warn_count = r.read_u16_le()
+        }
 
         // Meta data packets
-        // if num_params > 0 and CLIENT_OPTIONAL_RESULTSET_METADATA is not set or if medatdata_follows is RESULTSET_METADATA_FULL num_params packets will follow. Then a EOF_Packet will be transmitted, provided that CLIENT_DEPRECATE_EOF is not set.
-        if this.prep_param_count > 0 {
-            let x = this.prep_param_count
-            while x-- > 0 {
-                this.recv() !>
-                this.check_error() !>
-            }
-        }
-
-        // if num_columns > 0 and CLIENT_OPTIONAL_RESULTSET_METADATA is not set or if medatdata_follows is RESULTSET_METADATA_FULL num_columns packets will follow. Then a EOF_Packet will be transmitted, provided that CLIENT_DEPRECATE_EOF is not set.
-        if this.prep_column_count > 0 {
-            let x = this.prep_column_count
-            while x-- > 0 {
-                this.recv() !>
-                this.check_error() !>
-            }
-        }
+        this.read_prepare_param_data()
+        this.read_column_data()
     }
 
     fn send_prep_query(q: String) !Error {
@@ -248,17 +241,42 @@ extend Connection {
 
         // Send
         this.send() !>
-        this.recv() !>
-        this.check_error() !>
     }
 
     fn flush_result() !Error {
         let r = this.reader
         if !this.fetching : return
+        let row = Array[?String]{}
+        while this.fetching {
+            this.fetch_row(row)
+        }
+    }
+
+    fn check_result_set() !Error {
         while true {
             this.recv() !>
             this.check_error() !>
-            if r.read_byte() == 0xFE : break
+
+            let r = this.reader
+            this.col_count = r.read_int_enc()
+
+            if this.col_count > 0 {
+                this.read_column_data()
+                return
+            }
+
+            // 0x00 - End of resultset
+            r.skip(2)
+            let status = r.read_byte()
+
+            if status & SERVER_MORE_RESULTS_EXISTS > 0 {
+                // More resultsets
+                continue
+            }
+            // Nothing to fetch
+            this.fetching = false
+            this.stop_query()
+            break
         }
     }
 
@@ -278,8 +296,19 @@ extend Connection {
         // Next result
         this.recv() !>
         this.check_error() !>
+
+        // Check if end of result
         let r = this.reader
-        if r.read_byte() == 0xFE {
+        let h = r.read_byte()
+        if h == 0xFE {
+            // End of resultset
+            r.skip(2)
+            let status = r.read_byte()
+            if status & SERVER_MORE_RESULTS_EXISTS > 0 {
+                // More results
+                this.check_result_set() !>
+                return this.fetch_row(row) !>
+            }
             this.fetching = false
             this.stop_query()
             return false
@@ -331,10 +360,10 @@ extend Connection {
             }
             //
             if type == FIELD_TYPE.LONG {
-                let v = r.read_u32_le()
+                let v = r.read_u32_le().to(i32)
                 row.append(v)
             } else if type == FIELD_TYPE.LONGLONG {
-                let v = r.read_u64_le()
+                let v = r.read_u64_le().to(int)
                 row.append(v)
             } else if type == FIELD_TYPE.VAR_STRING {
                 let strlen = r.read_int_enc()

@@ -1,4 +1,6 @@
 
+@ignore_access
+
 test "Multi Statement" {
     let con = connect() ! {
       println(E.message)
@@ -8,5 +10,23 @@ test "Multi Statement" {
     // Setup table
     let sql = #embed("multi.sql")
     con.run(sql) ! { assert(false) return }
-    con.run(sql) ! { assert(false) return }
+
+    let fail = false
+    con.run("INSERX INTO t1 (name) VALUES (\"v1\")") ! {
+      fail = true
+    }
+    assert(fail == true)
+    con.run("INSERT INTO t2 (name) VALUES (\"v2\")") ! assert(false)
+
+    con.run("SELECT * FROM t2") ! assert(false)
+    let r1 = con.fetch_all() ! {
+      assert(false)
+      return
+    }
+    assert(r1.length == 1)
+    r1.get(0) -> v {
+      assert(v.length == 2) // columns
+      v.get(0) -> cv : assert(cv == "1")
+      v.get(1) -> cv : assert(cv == "v2")
+    }
 }

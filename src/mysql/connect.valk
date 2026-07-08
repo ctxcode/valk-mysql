@@ -87,6 +87,10 @@ use valk:net
             r.back(1)
             return
         }
+        // Disable fetch
+        this.fetching = false
+        this.stop_query()
+
         // Error code
         r.skip(2)
 
