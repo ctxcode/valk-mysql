@@ -64,7 +64,6 @@ extend Connection {
         let ss = this.statements
         each ss as statement, k {
             if statement.last_used < old {
-                println("============== CLOSE ================")
                 ss.remove(k)
                 let s = this.sender
                 // COM_STMT_CLOSE
@@ -234,8 +233,6 @@ extend Connection {
         s.write_byte(CURSOR.NONE.to(u8))
         // iteration_count : always 1
         s.write_u32_le(1)
-        // param_count
-        // data += write_int_encoded(data, param_count)
         // Null bitmap
         let null_bytec = (param_count + 7) / 8
         s.clear_next_bytes(null_bytec)
@@ -368,20 +365,6 @@ extend Connection {
         }
         return this.fetch_text_resultset(row) !>
     }
-
-    // + fn fetch[T](buffer: ?T (null)) bool !error {
-    //     buffer = buffer ?? T{}
-    //     #loop object buffer as prop
-    //     {
-    //         #if is_nullable_type(prop.type)
-    //         let nullable = true
-    //         #else
-    //         let nullable = false
-    //         #end
-    //         let size = size_of(prop.type)
-    //     }
-    //     #end
-    // }
 
     fn fetch_binary_resultset(row: Map[Value]) bool !Error {
         row.clear()
