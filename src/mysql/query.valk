@@ -1,6 +1,4 @@
 
-use valk:json
-
 extend Connection {
     column_types: Array[uint] (.{})
     column_names: Array[String] (.{})
@@ -13,7 +11,7 @@ extend Connection {
     in_progress : bool (false)
     columns_known : bool (false)
 
-    + fn query(q: String, binds: ?Map[json:Value] (null)) !Error {
+    + fn query(q: String, binds: ?Map[?Value] (null)) !Error {
         if this.in_progress : this.stop_query()
         //
         this.in_progress = true
@@ -199,7 +197,7 @@ extend Connection {
         let i : uint = 0
         while i < param_count {
             let bind = binds.get(i++) ! throw .error { message: "Missing bind values" }
-            if isset(bind) && !bind.is_null() : continue
+            if bind.type != TYPE.null : continue
             let byte_pos = (i - 1) / 8
             let bit_pos = ((i - 1) % 8).to(u8)
             let byte = @ptrv(null_data, u8, byte_pos)
@@ -211,17 +209,14 @@ extend Connection {
         s.write_byte(1)
         //
         each binds as bind, i {
-            if !isset(bind) : continue
-            if bind.is_null() : continue
+            if bind.type == TYPE.null : continue
             if i == param_count : break
 
-            if bind.is_bool() {
-                s.write_u16_le(FIELD_TYPE.TINY)
-            } else if bind.is_string() {
+            if bind.type == TYPE.string {
                 s.write_u16_le(FIELD_TYPE.VAR_STRING.to(u16))
-            } else if bind.is_int() {
+            } else if bind.type == TYPE.int {
                 s.write_u16_le(FIELD_TYPE.LONGLONG.to(u16))
-            } else if bind.is_float() {
+            } else if bind.type == TYPE.float {
                 s.write_u16_le(FIELD_TYPE.DOUBLE.to(u16))
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
@@ -229,18 +224,15 @@ extend Connection {
         }
         //
         each binds as bind, i {
-            if !isset(bind) : continue
-            if bind.is_null() : continue
+            if bind.type == TYPE.null : continue
             if i == param_count : break
             //
-            if bind.is_bool() {
-                s.write_byte(bind.bool_value ? 1 : 0)
-            } else if bind.is_string() {
+            if bind.type == TYPE.string {
                 s.write_int_encoded(bind.string_value.length)
                 s.write_string(bind.string_value)
-            } else if bind.is_int() {
+            } else if bind.type == TYPE.int {
                 s.write_u64_le(bind.int_value)
-            } else if bind.is_float() {
+            } else if bind.type == TYPE.float {
                 s.write_f64_le(bind.float_value)
             } else {
                 throw .error { message: "Bug: Unhandled bind value type" }
@@ -254,7 +246,7 @@ extend Connection {
     fn flush_result() !Error {
         let r = this.reader
         if !this.fetching : return
-        let row = Map[?String]{}
+        let row = Map[Value]{}
         while this.fetching {
             this.fetch_row(row)
         }
@@ -288,16 +280,16 @@ extend Connection {
         }
     }
 
-    + fn fetch_all() Array[Map[?String]] !Error {
-        let result = Array[Map[?String]]{}
-        let row : Map[?String] = .{}
+    + fn fetch_all() Array[Map[Value]] !Error {
+        let result = Array[Map[Value]]{}
+        let row : Map[Value] = .{}
         while this.fetch_row(row) !> {
             result.append(row.copy())
         }
         return result
     }
 
-    + fn fetch_row(row: Map[?String]) bool !Error {
+    + fn fetch_row(row: Map[Value]) bool !Error {
         row.clear()
         if !this.fetching : return false
 
@@ -343,7 +335,7 @@ extend Connection {
     //     #end
     // }
 
-    fn fetch_binary_resultset(row: Map[?String]) bool !Error {
+    fn fetch_binary_resultset(row: Map[Value]) bool !Error {
         row.clear()
         let r = this.reader
         r.skip(1) // Skip header byte (0x00)
@@ -366,12 +358,12 @@ extend Connection {
             let byte = @ptrv(null_data, u8, byte_pos)
             let is_null = (byte & (1 << bit_pos)) > 0
             if is_null {
-                row.set(name, null)
+                row.set(name, Value.null())
                 continue
             }
             //
             if type == FIELD_TYPE.LONG {
-                let v = r.read_u32_le().to(i32)
+                let v = r.read_u32_le().to(int)
                 row.set(name, v)
             } else if type == FIELD_TYPE.LONGLONG {
                 let v = r.read_u64_le().to(int)
@@ -387,26 +379,39 @@ extend Connection {
         return true
     }
 
-    fn fetch_text_resultset(row: Map[?String]) bool !Error {
+    fn fetch_text_resultset(row: Map[Value]) bool !Error {
         let r = this.reader
         //
         let col_names = this.column_names
+        let col_types = this.column_types
         let col_count = this.col_count
         let i : uint = 0
         while i < col_count {
             //
+            let type = col_types.get(i) ! throw .error { message: "Bug: Missing column type" }
             let name = col_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             //
             let len = r.read_int_enc()
             // Is null check
             if len == 0xFB {
-                row.set(name, null)
+                row.set(name, Value.null())
                 continue
             }
             // String data
-            let str = r.read_string(len)
-            row.set(name, str)
+            let pos = r.pos
+
+            if type == FIELD_TYPE.LONG || type == FIELD_TYPE.LONGLONG {
+                let v = r.read_int()
+                row.set(name, v)
+            } else if type == FIELD_TYPE.VAR_STRING {
+                let str = r.read_string(len)
+                row.set(name, str)
+            } else {
+                throw .error { message: "Bug: Unhandled mysql type: " + type }
+            }
+
+            r.pos = pos + len
         }
         return true
     }

@@ -1,21 +1,18 @@
 
-use valk:json
 use valk:core
 
 extend Connection {
-    binds: Array[?json:Value] (.{})
-    named_binds: Map[?json:Value] (.{})
+    binds: Array[Value] (.{})
+    named_binds: Map[Value] (.{})
     bind_data: ByteBuffer (.new())
-    final_binds: Array[?json:Value] (.{})
+    final_binds: Array[Value] (.{})
     disable_inline_binds: bool (false)
 
     + fn bind(name: String, value: $T) {
-        let v = json:value(value)
-        this.named_binds.set(name, v)
+        this.named_binds.set(name, convert(value))
     }
     + fn bindv(value: $T) {
-        let v = json:value(value)
-        this.binds.append(v)
+        this.binds.append(convert(value))
     }
 
     + fn replace_named_params(query: String) String !Error {
@@ -55,10 +52,13 @@ extend Connection {
                     let name = query.part(start, len)
                     let bindv = this.named_binds.get(name) ! throw .error { message: "Cannot find named binding: '" + name + "'" }
                     if isset(bindv) {
-                        if bindv.is_array() {
-                            each bindv.array() as val, i {
-                                if i > 0 : r.write_byte(',')
-                                this.insert_bind_value(r, val)
+                        if bindv.type == TYPE.array {
+                            let items = bindv.array_items
+                            if isset(items) {
+                                each items as val, i {
+                                    if i > 0 : r.write_byte(',')
+                                    this.insert_bind_value(r, val)
+                                }
                             }
                         } else {
                             this.insert_bind_value(r, bindv)
@@ -80,17 +80,14 @@ extend Connection {
         return r.to_string()
     }
 
-    fn insert_bind_value(q: ByteBuffer, v: ?json:Value) {
+    fn insert_bind_value(q: ByteBuffer, v: Value) {
 
         if isset(v) && !this.disable_inline_binds {
             let inline = false
-            if v.is_int() {
+            if v.type == TYPE.int {
                 q.write_int_ascii(v.int_value)
                 return
-            } else if v.is_bool() {
-                q.write_string(v.bool_value ? "true" : "false")
-                return
-            } else if v.is_string() {
+            } else if v.type == TYPE.string {
                 let valid = true
                 each v.string_value as ch {
                     if ch < 32 || ch > 126 || ch == '"' || ch == '\'' || ch == '\\' || ch == '?' {

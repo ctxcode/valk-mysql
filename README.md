@@ -31,7 +31,7 @@ db.query("UPDATE users SET (name) VALUES (?) WHERE id = ?") ! panic("Error: %EMS
 db.select("SELECT * FROM users WHERE id > :id", .{ "id" => 10 }) ! panic("Error: %EMSG")
 
 // Fetch 1-by-1
-let user : Map[?String] = .{}
+let user : Map[json:Value] = .{}
 while this.fetch_row(user) ! panic("Error: %EMSG") {
     println("name: " + user["name"] ?? "/")
 }

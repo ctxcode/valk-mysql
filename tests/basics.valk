@@ -1,5 +1,6 @@
 
 use valk:time
+use mysql:mysql
 
 test "Basics" {
     let con = connect() ! {
@@ -10,7 +11,7 @@ test "Basics" {
 
     let name1 = "valk"
     let name2 = "ctx"
-    let r : Array[Map[?String]] = .{}
+    let r : Array[Map[mysql:Value]] = .{}
 
     // Setup table
     con.query("CREATE TABLE IF NOT EXISTS `users` (
@@ -43,16 +44,23 @@ test "Basics" {
     assert(((time:microtime() - start) / 1000) < 10)
     start = time:microtime()
 
-    con.bind("name", name2)
-    con.query("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
+    con.query("SELECT * FROM users WHERE name = :name", .{ "name" => name2 }) ! {
+      println("ERROR: " + E.message)
+      assert(false)
+      return
+    }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 0)
 
     assert(((time:microtime() - start) / 1000) < 10)
     start = time:microtime()
 
-    con.bind("ids", Array[uint]{ 1, 2, 3 })
-    con.query("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
+    con.bind("ids", Array[?uint]{ 1, 2222222222, 3 })
+    con.query("SELECT * FROM users WHERE id IN (:ids)") ! {
+      println("ERROR: " + E.message)
+      assert(false)
+      return
+    }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 1)
 
