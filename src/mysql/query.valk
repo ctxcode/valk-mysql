@@ -1,4 +1,6 @@
 
+use valk:json
+
 extend Connection {
     column_types: Array[uint] (.{})
     column_names: Array[String] (.{})
@@ -11,10 +13,16 @@ extend Connection {
     in_progress : bool (false)
     columns_known : bool (false)
 
-    + fn run(q: String) !Error {
+    + fn query(q: String, binds: ?Map[json:Value] (null)) !Error {
         if this.in_progress : this.stop_query()
         //
         this.in_progress = true
+
+        if isset(binds) {
+            each binds as value, name {
+                this.bind(name, value)
+            }
+        }
 
         // Replace bindings
         if (this.binds.length + this.named_binds.length) > 0 {
@@ -246,7 +254,7 @@ extend Connection {
     fn flush_result() !Error {
         let r = this.reader
         if !this.fetching : return
-        let row = Array[?String]{}
+        let row = Map[?String]{}
         while this.fetching {
             this.fetch_row(row)
         }
@@ -280,16 +288,16 @@ extend Connection {
         }
     }
 
-    + fn fetch_all() Array[Array[?String]] !Error {
-        let result = Array[Array[?String]]{}
-        let row : Array[?String] = .{}
+    + fn fetch_all() Array[Map[?String]] !Error {
+        let result = Array[Map[?String]]{}
+        let row : Map[?String] = .{}
         while this.fetch_row(row) !> {
             result.append(row.copy())
         }
         return result
     }
 
-    + fn fetch_row(row: Array[?String]) bool !Error {
+    + fn fetch_row(row: Map[?String]) bool !Error {
         row.clear()
         if !this.fetching : return false
 
@@ -335,13 +343,15 @@ extend Connection {
     //     #end
     // }
 
-    fn fetch_binary_resultset(row: Array[?String]) bool !Error {
+    fn fetch_binary_resultset(row: Map[?String]) bool !Error {
         row.clear()
         let r = this.reader
         r.skip(1) // Skip header byte (0x00)
         // Null data
         let null_data = this.reader.buf.data.@offset(this.reader.pos)
         let col_count = this.col_count
+        let col_names = this.column_names
+        let col_types = this.column_types
         let null_bytec = (col_count + 7) / 8
         r.skip(null_bytec)
         //
@@ -349,26 +359,27 @@ extend Connection {
         while i < col_count {
             let byte_pos = i / 8
             let bit_pos = (i % 8).to(u8)
-            let type = this.column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let type = col_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let name = col_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             // Check if is null
             let byte = @ptrv(null_data, u8, byte_pos)
             let is_null = (byte & (1 << bit_pos)) > 0
             if is_null {
-                row.append(null)
+                row.set(name, null)
                 continue
             }
             //
             if type == FIELD_TYPE.LONG {
                 let v = r.read_u32_le().to(i32)
-                row.append(v)
+                row.set(name, v)
             } else if type == FIELD_TYPE.LONGLONG {
                 let v = r.read_u64_le().to(int)
-                row.append(v)
+                row.set(name, v)
             } else if type == FIELD_TYPE.VAR_STRING {
                 let strlen = r.read_int_enc()
                 let str = r.read_string(strlen)
-                row.append(str)
+                row.set(name, str)
             } else {
                 throw .error { message: "Bug: Unhandled mysql type: " + type }
             }
@@ -376,20 +387,26 @@ extend Connection {
         return true
     }
 
-    fn fetch_text_resultset(row: Array[?String]) bool !Error {
+    fn fetch_text_resultset(row: Map[?String]) bool !Error {
         let r = this.reader
         //
-        let x = this.col_count
-        while x-- > 0 {
+        let col_names = this.column_names
+        let col_count = this.col_count
+        let i : uint = 0
+        while i < col_count {
+            //
+            let name = col_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+            i++
+            //
             let len = r.read_int_enc()
             // Is null check
             if len == 0xFB {
-                row.append(null)
+                row.set(name, null)
                 continue
             }
             // String data
             let str = r.read_string(len)
-            row.append(str)
+            row.set(name, str)
         }
         return true
     }

@@ -10,10 +10,10 @@ test "Basics" {
 
     let name1 = "valk"
     let name2 = "ctx"
-    let r : Array[Array[?String]] = .{}
+    let r : Array[Map[?String]] = .{}
 
     // Setup table
-    con.run("CREATE TABLE IF NOT EXISTS `users` (
+    con.query("CREATE TABLE IF NOT EXISTS `users` (
       `id` int NOT NULL AUTO_INCREMENT,
       `name` varchar(50) DEFAULT NULL,
       PRIMARY KEY (`id`)
@@ -23,12 +23,11 @@ test "Basics" {
       return
     }
 
-    con.run("TRUNCATE TABLE users") ! { assert(false) return }
+    con.query("TRUNCATE TABLE users") ! { assert(false) return }
 
     //
     let start = time:microtime()
-    con.bind("name", name1)
-    con.run("INSERT INTO users (name) VALUES (:name)") ! {
+    con.query("INSERT INTO users (name) VALUES (:name)", .{ "name" => name1 }) ! {
       println(E.message)
       assert(false)
       return
@@ -37,8 +36,7 @@ test "Basics" {
     assert(((time:microtime() - start) / 1000) < 40)
     start = time:microtime()
 
-    con.bind("name", name1)
-    con.run("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
+    con.query("SELECT * FROM users WHERE name = :name", .{ "name" => name1 }) ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 1)
 
@@ -46,7 +44,7 @@ test "Basics" {
     start = time:microtime()
 
     con.bind("name", name2)
-    con.run("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
+    con.query("SELECT * FROM users WHERE name = :name") ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 0)
 
@@ -54,7 +52,7 @@ test "Basics" {
     start = time:microtime()
 
     con.bind("ids", Array[uint]{ 1, 2, 3 })
-    con.run("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
+    con.query("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 1)
 
@@ -63,13 +61,13 @@ test "Basics" {
 
     // Insert next
     con.bind("name", name2)
-    con.run("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+    con.query("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
 
     assert(((time:microtime() - start) / 1000) < 40)
     start = time:microtime()
 
     con.bind("ids", Array[uint]{ 1, 2, 3 })
-    con.run("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
+    con.query("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 2)
 

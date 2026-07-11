@@ -9,24 +9,24 @@ test "Multi Statement" {
     }
     // Setup table
     let sql = #embed("multi.sql")
-    con.run(sql) ! { assert(false) return }
+    con.query(sql) ! { assert(false) return }
 
     // Invalid query
     let fail = false
-    con.run("INSERX INTO t1 (name) VALUES (\"v1\")") ! {
+    con.query("INSERX INTO t1 (name) VALUES (\"v1\")") ! {
       fail = true
     }
     assert(fail == true)
 
     // Add data
-    con.run("
+    con.query("
     INSERT INTO t1 (name) VALUES (\"v1\");
     INSERT INTO t1 (name) VALUES (\"v2\");
     INSERT INTO t1 (name) VALUES (\"v3\");
     ") ! assert(false)
 
     // Select
-    con.run("SELECT * FROM t1") ! assert(false)
+    con.query("SELECT * FROM t1") ! assert(false)
     let r1 = con.fetch_all() ! {
       assert(false)
       return

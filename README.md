@@ -16,23 +16,24 @@ vman install github.com/ctxcode/valk-mysql
 let db = mysql:connect("127.0.0.1", "user", "password", "dbname", 3306) ! panic("Failed to connect: %EMSG")
 
 // Run query + parameters
+db.query("UPDATE users SET (name) VALUES (:name) WHERE id = :id", .{ "name" => "test", "id" => 1 }) ! panic("Error: %EMSG")
+
+// Bind early
 db.bind("name", "test")
-db.bind("id", 1)
-db.run("UPDATE users SET (name) VALUES (:name) WHERE id = :id") ! panic("Error: %EMSG")
+db.query("UPDATE users SET (name) VALUES (:name) WHERE id = :id", .{ "id" => 1 }) ! panic("Error: %EMSG")
 
 // Nameless parameters
 db.bindv("test")
 db.bindv(10)
-db.run("UPDATE users SET (name) VALUES (?) WHERE id = ?") ! panic("Error: %EMSG")
+db.query("UPDATE users SET (name) VALUES (?) WHERE id = ?") ! panic("Error: %EMSG")
 
 // Select
-db.bind("id", 100)
-db.select("SELECT * FROM users WHERE id > :id") ! panic("Error: %EMSG")
+db.select("SELECT * FROM users WHERE id > :id", .{ "id" => 10 }) ! panic("Error: %EMSG")
 
 // Fetch 1-by-1
-let columns : Array[?String] = .{}
-while this.fetch_row(columns) ! panic("Error: %EMSG") {
-    println("ROW DATA: " + columns.join(" | "))
+let user : Map[?String] = .{}
+while this.fetch_row(user) ! panic("Error: %EMSG") {
+    println("name: " + user["name"] ?? "/")
 }
 
 // Fetch all

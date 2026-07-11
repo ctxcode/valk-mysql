@@ -4,8 +4,8 @@ use mysql:mysql
 fn connect() mysql:Connection !mysql:Error {
 
     let con = mysql:connect("127.0.0.1", "test", "root", null, 3306) !>
-    con.run("CREATE DATABASE IF NOT EXISTS `valk_mysql_tests` /*!40100 COLLATE 'utf8mb4_unicode_ci' */;")
-    con.run("USE valk_mysql_tests;")
+    con.query("CREATE DATABASE IF NOT EXISTS `valk_mysql_tests` /*!40100 COLLATE 'utf8mb4_unicode_ci' */;")
+    con.query("USE valk_mysql_tests;")
 
     // let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3306) !>
     // con.debug = true
