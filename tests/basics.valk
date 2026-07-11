@@ -44,7 +44,6 @@ test "Basics" {
     assert(((time:microtime() - start) / 1000) < 10)
     start = time:microtime()
 
-    con.bindv(null)
     con.query("SELECT * FROM users WHERE name = :name", .{ "name" => name2 }) ! {
       println("ERROR: " + E.message)
       assert(false)
