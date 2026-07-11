@@ -1,12 +1,25 @@
 
+use valk:time
+
+class Statement {
+    id: uint
+    last_used: uint
+    column_count: uint
+    param_count: uint
+    column_types: Array[uint]
+    column_names: Array[String]
+}
+
 extend Connection {
-    column_types: Array[uint] (.{})
-    column_names: Array[String] (.{})
-    col_count: uint (0)
+    default_column_types: Array[uint]
+    default_column_names: Array[String]
+    column_types: Array[uint]
+    column_names: Array[String]
+    column_count: uint (0)
     statement_id: uint (0)
-    prep_column_count: uint (0)
-    prep_param_count: uint (0)
+    param_count: uint (0)
     fetching: bool (false)
+    statements: Map[Statement] (.{})
     is_statement: bool (false)
     in_progress : bool (false)
     columns_known : bool (false)
@@ -45,6 +58,23 @@ extend Connection {
         this.binds.clear()
         this.named_binds.clear()
     }
+    + fn clear_old_statements() {
+        let now = time:microtime()
+        let old = now - (3 * 1000 * 1000) // - 3 seconds
+        let ss = this.statements
+        each ss as statement, k {
+            if statement.last_used < old {
+                println("============== CLOSE ================")
+                ss.remove(k)
+                let s = this.sender
+                // COM_STMT_CLOSE
+                s.write_byte(0x19)
+                this.seqid = 0
+                s.write_u32_le(statement.id.to(u32))
+                this.send() _
+            }
+        }
+    }
 
     fn stop_query() {
         if this.fetching : this.flush_result() _
@@ -57,12 +87,7 @@ extend Connection {
         // Close statement
         if this.is_statement {
             this.is_statement = false
-            let s = this.sender
-            // COM_STMT_CLOSE
-            s.write_byte(0x19)
-            this.seqid = 0
-            s.write_u32_le(this.statement_id.to(u32))
-            this.send() _
+            this.clear_old_statements()
         }
     }
 
@@ -73,19 +98,19 @@ extend Connection {
         types.clear()
         //
         let i : uint = 0
-        let col_count = this.col_count
-        while i++ < col_count {
-            let col_name, type = this.read_column() !>
-            this.column_names.append(col_name)
+        let column_count = this.column_count
+        while i++ < column_count {
+            let column_name, type = this.read_column() !>
+            this.column_names.append(column_name)
             this.column_types.append(type)
         }
     }
 
     fn read_prepare_param_data() !Error {
         let i : uint = 0
-        let count = this.prep_param_count
+        let count = this.param_count
         while i++ < count {
-            let col_name, type = this.read_column() !>
+            let column_name, type = this.read_column() !>
         }
     }
 
@@ -107,7 +132,7 @@ extend Connection {
         r.skip(strlen)
         // col name
         strlen = r.read_int_enc()
-        let col_name = r.read_string(strlen)
+        let column_name = r.read_string(strlen)
         // col org_name
         strlen = r.read_int_enc()
         r.skip(strlen)
@@ -126,7 +151,7 @@ extend Connection {
         r.skip(1)
         // reserved
         r.skip(2)
-        return (col_name, type)
+        return (column_name, type)
     }
 
     fn send_com_query(q: String) !Error {
@@ -139,6 +164,17 @@ extend Connection {
     }
 
     fn prepare(q: String) !Error {
+
+        this.statements.get(q) -> stmt {
+            this.statement_id = stmt.id
+            this.column_names = stmt.column_names
+            this.column_types = stmt.column_types
+            this.column_count = stmt.column_count
+            this.param_count = stmt.param_count
+            stmt.last_used = time:microtime()
+            return
+        }
+
         let s = this.sender
         // COM_STMT_PREPARE
         this.seqid = 0
@@ -157,9 +193,9 @@ extend Connection {
         // Statement ID
         this.statement_id = r.read_u32_le()
         // Col count
-        this.col_count = r.read_u16_le()
+        this.column_count = r.read_u16_le()
         // Param count
-        this.prep_param_count = r.read_u16_le()
+        this.param_count = r.read_u16_le()
         // Filler
         r.skip(1)
         // Warnings
@@ -170,6 +206,17 @@ extend Connection {
         // Meta data packets
         this.read_prepare_param_data()
         this.read_column_data()
+
+        // Store statement
+        let stmt = Statement {
+            id: this.statement_id
+            column_count: this.column_count
+            param_count: this.param_count
+            column_names: this.column_names.copy()
+            column_types: this.column_types.copy()
+            last_used: time:microtime()
+        }
+        this.statements.set(q, stmt)
     }
 
     fn send_prep_query(q: String) !Error {
@@ -177,7 +224,7 @@ extend Connection {
         this.prepare(q) !>
         // Execute
         let s = this.sender
-        let param_count = this.prep_param_count
+        let param_count = this.param_count
         // COM_STMT_EXECUTE
         this.seqid = 0
         s.write_byte(0x17)
@@ -207,12 +254,13 @@ extend Connection {
         s.skip(null_bytec)
         // new_params_bind_flag
         s.write_byte(1)
-        //
+        // Write types
         each binds as bind, i {
-            if bind.type == TYPE.null : continue
             if i == param_count : break
 
-            if bind.type == TYPE.string {
+            if bind.type == TYPE.null {
+                s.write_u16_le(FIELD_TYPE.NULL.to(u16))
+            } else if bind.type == TYPE.string {
                 s.write_u16_le(FIELD_TYPE.VAR_STRING.to(u16))
             } else if bind.type == TYPE.int {
                 s.write_u16_le(FIELD_TYPE.LONGLONG.to(u16))
@@ -222,7 +270,7 @@ extend Connection {
                 throw .error { message: "Bug: Unhandled bind value type" }
             }
         }
-        //
+        // Write values
         each binds as bind, i {
             if bind.type == TYPE.null : continue
             if i == param_count : break
@@ -258,9 +306,9 @@ extend Connection {
             this.check_error() !>
 
             let r = this.reader
-            this.col_count = r.read_int_enc()
+            this.column_count = r.read_int_enc()
 
-            if this.col_count > 0 {
+            if this.column_count > 0 {
                 this.read_column_data()
                 return
             }
@@ -341,18 +389,18 @@ extend Connection {
         r.skip(1) // Skip header byte (0x00)
         // Null data
         let null_data = this.reader.buf.data.@offset(this.reader.pos)
-        let col_count = this.col_count
-        let col_names = this.column_names
-        let col_types = this.column_types
-        let null_bytec = (col_count + 7) / 8
+        let column_count = this.column_count
+        let column_names = this.column_names
+        let column_types = this.column_types
+        let null_bytec = (column_count + 7 + 2) / 8
         r.skip(null_bytec)
         //
         let i : uint = 0
-        while i < col_count {
-            let byte_pos = i / 8
-            let bit_pos = (i % 8).to(u8)
-            let type = col_types.get(i) ! throw .error { message: "Bug: Missing column type" }
-            let name = col_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+        while i < column_count {
+            let byte_pos = (i + 2) / 8
+            let bit_pos = ((i + 2) % 8).to(u8)
+            let type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             // Check if is null
             let byte = @ptrv(null_data, u8, byte_pos)
@@ -382,14 +430,14 @@ extend Connection {
     fn fetch_text_resultset(row: Map[Value]) bool !Error {
         let r = this.reader
         //
-        let col_names = this.column_names
-        let col_types = this.column_types
-        let col_count = this.col_count
+        let column_names = this.column_names
+        let column_types = this.column_types
+        let column_count = this.column_count
         let i : uint = 0
-        while i < col_count {
+        while i < column_count {
             //
-            let type = col_types.get(i) ! throw .error { message: "Bug: Missing column type" }
-            let name = col_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+            let type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             //
             let len = r.read_int_enc()

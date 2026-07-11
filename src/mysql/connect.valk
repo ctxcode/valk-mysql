@@ -1,10 +1,13 @@
 
 use valk:net
+use valk:time
 
 + fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error {
 
     let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
+    let col_types = Array[uint]{}
+    let col_names = Array[String]{}
     let con = Connection {
         con: sock
         host: host
@@ -12,6 +15,11 @@ use valk:net
         password: password
         db: db
         reader: ByteReader.new(.new())
+        //
+        default_column_types: col_types
+        default_column_names: col_names
+        column_types: col_types
+        column_names: col_names
     }
     con.init() !>
     con.password = "" // clear from memory
@@ -45,6 +53,7 @@ use valk:net
     //
     ssl_enabled: bool (false)
     + debug: bool (false)
+    + debug_bytes: bool (false)
     ~ closed: bool (false)
     //
 
@@ -105,6 +114,9 @@ use valk:net
     }
 
     fn recv() !Error {
+        let start : uint = 0
+        if this.debug : start = time:microtime()
+
         let buf = this.data_in
         let recv_bytes : uint = buf.length
         if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
@@ -126,8 +138,9 @@ use valk:net
         buf.clear_until(payload_len + 4)
         //
         if this.debug {
-            println("RECV: " + (this.seqid - 1))
-            this.reader.buf.data.@cast(ptr).print_bytes(this.reader.buf.length)
+            println("RECV SEQ ID: " + (this.seqid - 1))
+            if this.debug_bytes : this.reader.buf.data.@cast(ptr).print_bytes(this.reader.buf.length)
+            println("Time needed to read: " + ((time:microtime() - start) / 1000) + "ms")
             println("------")
         }
     }
@@ -135,7 +148,7 @@ use valk:net
     fn send() !Error {
         let s = this.sender
         let pb = this.packetbuf
-        let id = this.seqid++
+        let id = (this.seqid++)
         pb.clear()
         pb.reserve_space(4)
         let len = s.length
@@ -146,13 +159,19 @@ use valk:net
         pb.write_buffer(s)
         s.clear() // Clear send data
         //
+        let start : uint = 0
         if this.debug {
-            println("SEND: " + id)
-            pb.data.@cast(ptr).print_bytes(pb.length)
-            println("------")
+            start = time:microtime()
+            println("SEND SEQ ID: " + id)
+            if this.debug_bytes : pb.data.@cast(ptr).print_bytes(pb.length)
         }
         //
         this.con.send_buffer(pb, 0, true) ! throw .error { message: "Failed to send bytes to server" }
+        //
+        if this.debug {
+            println("Time needed to send: " + ((time:microtime() - start) / 1000) + "ms")
+            println("------")
+        }
     }
 
     fn get_caps() u64 {
