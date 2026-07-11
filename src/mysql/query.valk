@@ -428,7 +428,7 @@ extend Connection {
             } else if type == FIELD_TYPE.DOUBLE {
                 let v = r.buf.data.@offset(r.pos).read_float(8) !? 0.0
                 row.set(name, v)
-            } else if type == FIELD_TYPE.VAR_STRING {
+            } else if type == FIELD_TYPE.STRING || type == FIELD_TYPE.VARCHAR || type == FIELD_TYPE.VAR_STRING || type == FIELD_TYPE.ENUM || type == FIELD_TYPE.SET || type == FIELD_TYPE.LONG_BLOB || type == FIELD_TYPE.MEDIUM_BLOB || type == FIELD_TYPE.BLOB || type == FIELD_TYPE.TINY_BLOB || type == FIELD_TYPE.GEOMETRY || type == FIELD_TYPE.BIT || type == FIELD_TYPE.DECIMAL || type == FIELD_TYPE.NEWDECIMAL || type == FIELD_TYPE.JSON {
                 let strlen = r.read_int_enc()
                 let str = r.read_string(strlen)
                 row.set(name, str)
@@ -460,12 +460,40 @@ extend Connection {
                 if type == FIELD_TYPE.DATE {
                     row.set(name, date)
                 } else {
-                    let time = "%{hour.to(String).pad_left('0', 2)}-%{min.to(String).pad_left('0', 2)}-%{sec.to(String).pad_left('0', 2)}"
+                    let time = "%{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
                     if len == 7 {
                         row.set(name, date + " " + time)
                     } else {
                         row.set(name, date + " " + time + "." + usec.to(String).pad_left('0', 6))
                     }
+                }
+
+            } else if type == FIELD_TYPE.TIME {
+                let len = r.read_byte()
+                if len != 0 && len != 8 && len != 12 : throw .error { message: "Mysql server responded with an invalid datetime value length: %len" }
+                let negative = r.read_byte() == 1
+                let days : uint = 0
+                let hour : uint = 0
+                let min : uint = 0
+                let sec : uint = 0
+                let usec : uint = 0
+                if len >= 0 {
+                    // Date
+                    days = r.read_u32_le()
+                }
+                if len >= 8 {
+                    hour = r.read_byte()
+                    min = r.read_byte()
+                    sec = r.read_byte()
+                }
+                if len == 12 {
+                    usec = r.read_u32_le()
+                }
+                let time = "%{negative ? "-" : ""}%{days}d %{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
+                if len < 12 {
+                    row.set(name, time)
+                } else {
+                    row.set(name, time + "." + usec.to(String).pad_left('0', 6))
                 }
             } else {
                 throw .error { message: "Bug: Unhandled mysql type: " + type }
