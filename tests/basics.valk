@@ -33,6 +33,8 @@ test "Basics" {
       assert(false)
       return
     }
+    assert(con.affected_rows == 1)
+    assert(con.last_inserted_id == 1)
 
     assert(((time:microtime() - start) / 1000) < 40)
     start = time:microtime()
@@ -82,6 +84,8 @@ test "Basics" {
     // Insert next
     con.bind("name", name2)
     con.query("INSERT INTO users (name) VALUES (:name)") ! { assert(false) return }
+    assert(con.affected_rows == 1)
+    assert(con.last_inserted_id == 2)
 
     assert(((time:microtime() - start) / 1000) < 40)
     start = time:microtime()

@@ -18,6 +18,8 @@ extend Connection {
     column_count: uint (0)
     statement_id: uint (0)
     param_count: uint (0)
+    ~ affected_rows: uint (0)
+    ~ last_inserted_id: uint (0)
     fetching: bool (false)
     statements: Map[Statement] (.{})
     is_statement: bool (false)
@@ -311,9 +313,12 @@ extend Connection {
             }
 
             // 0x00 - End of resultset
-            r.skip(2)
+            // Affected rows
+            this.affected_rows = r.read_int_enc()
+            // Last inserted id
+            this.last_inserted_id = r.read_int_enc()
+            // Status
             let status = r.read_byte()
-
             if status & SERVER_MORE_RESULTS_EXISTS > 0 {
                 // More resultsets
                 continue
@@ -347,7 +352,11 @@ extend Connection {
         let h = r.read_byte()
         if h == 0xFE {
             // End of resultset
-            r.skip(2)
+            // Affected rows
+            this.affected_rows = r.read_int_enc()
+            // Last inserted id
+            this.last_inserted_id = r.read_int_enc()
+            // Status
             let status = r.read_byte()
             if status & SERVER_MORE_RESULTS_EXISTS > 0 {
                 // More results
