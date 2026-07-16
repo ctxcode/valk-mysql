@@ -1,6 +1,6 @@
 
 use valk:time
-use mysql:mysql
+use mysql
 
 test "Basics" {
     let con = connect() ! {
