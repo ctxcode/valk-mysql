@@ -61,6 +61,27 @@ use valk:json
             type: TYPE.null
         }
     }
+
+    + fn to_bool_or_null() ?bool $to {
+        if this.type == TYPE.null : return null
+        return this.to_bool()
+    }
+    + fn to_string_or_null() ?String $to {
+        if this.type == TYPE.null : return null
+        return this.to_string()
+    }
+    + fn to_int_or_null() ?int $to {
+        if this.type == TYPE.null : return null
+        return this.to_int()
+    }
+    + fn to_float_or_null() ?float $to {
+        if this.type == TYPE.null : return null
+        return this.to_float()
+    }
+    + fn to_json_or_null() ?json:Value $to {
+        if this.type == TYPE.null : return null
+        return this.to_json()
+    }
 }
 
 extend bool {
