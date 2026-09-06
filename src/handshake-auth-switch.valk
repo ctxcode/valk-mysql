@@ -5,7 +5,7 @@ extend Connection {
         let r = this.reader
         let h = r.read_byte()
         if h != 0xFE {
-            r.back(1)
+            r.rewind(1)
             return false
         }
         // Auth plugin name
@@ -18,7 +18,7 @@ extend Connection {
 
         this.check_auth_method() !>
         let auth_response = this.auth_response()
-        this.sender.write_string(auth_response)
+        this.sender.write(auth_response)
 
         this.send() !>
         this.recv() !>

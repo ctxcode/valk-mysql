@@ -1,5 +1,5 @@
 
-use valk:time
+use valk.time
 use mysql
 
 test "Basics" {
@@ -11,7 +11,7 @@ test "Basics" {
 
     let name1 = "valk"
     let name2 = "ctx"
-    let r : Array[Map[mysql:Value]] = .{}
+    let r : Array[Map[mysql.Value]] = .{}
 
     // Setup table
     con.query("CREATE TABLE IF NOT EXISTS `users` (
@@ -27,7 +27,7 @@ test "Basics" {
     con.query("TRUNCATE TABLE users") ! { assert(false) return }
 
     //
-    let start = time:microtime()
+    let start = time.mono_us()
     con.query("INSERT INTO users (name) VALUES (:name)", .{ "name" => name1 }) ! {
       println(E.message)
       assert(false)
@@ -36,15 +36,15 @@ test "Basics" {
     assert(con.affected_rows == 1)
     assert(con.last_inserted_id == 1)
 
-    assert(((time:microtime() - start) / 1000) < 40)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 40)
+    start = time.mono_us()
 
     con.query("SELECT * FROM users WHERE name = :name", .{ "name" => name1 }) ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 1)
 
-    assert(((time:microtime() - start) / 1000) < 10)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 10)
+    start = time.mono_us()
 
     con.query("SELECT * FROM users WHERE name = :name", .{ "name" => null }) ! {
       println("ERROR: " + E.message)
@@ -54,8 +54,8 @@ test "Basics" {
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 0)
 
-    assert(((time:microtime() - start) / 1000) < 10)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 10)
+    start = time.mono_us()
 
     con.query("SELECT * FROM users WHERE name = :name", .{ "name" => null }) ! {
       println("ERROR: " + E.message)
@@ -65,8 +65,8 @@ test "Basics" {
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 0)
 
-    assert(((time:microtime() - start) / 1000) < 10)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 10)
+    start = time.mono_us()
 
 
     con.bind("ids", Array[?uint]{ 1, 2, 3 })
@@ -78,8 +78,8 @@ test "Basics" {
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 1)
 
-    assert(((time:microtime() - start) / 1000) < 10)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 10)
+    start = time.mono_us()
 
     // Insert next
     con.bind("name", name2)
@@ -87,14 +87,14 @@ test "Basics" {
     assert(con.affected_rows == 1)
     assert(con.last_inserted_id == 2)
 
-    assert(((time:microtime() - start) / 1000) < 40)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 40)
+    start = time.mono_us()
 
     con.bind("ids", Array[uint]{ 1, 2, 3 })
     con.query("SELECT * FROM users WHERE id IN (:ids)") ! { assert(false) return }
     r = con.fetch_all() ! { assert(false) return }
     assert(r.length == 2)
 
-    assert(((time:microtime() - start) / 1000) < 10)
-    start = time:microtime()
+    assert(((time.mono_us() - start) / 1000) < 10)
+    start = time.mono_us()
 }

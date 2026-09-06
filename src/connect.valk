@@ -1,10 +1,10 @@
 
-use valk:net
-use valk:time
+use valk.net
+use valk.time
 
 + fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error {
 
-    let sock = net:Socket.client(net:SOCKET_TYPE.TCP, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
+    let sock = net.Socket.client(net.SocketType.tcp, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
     let col_types = Array[uint]{}
     let col_names = Array[String]{}
@@ -14,7 +14,7 @@ use valk:time
         username: user
         password: password
         db: db
-        reader: ByteReader.new(.new())
+        reader: ByteReader.new("")
         //
         default_column_types: col_types
         default_column_names: col_names
@@ -28,7 +28,7 @@ use valk:time
 }
 
 + class Connection {
-    con: net:Connection
+    con: net.Connection
     //
     host: String
     username: String
@@ -66,7 +66,7 @@ use valk:time
             if count++ > 10 : throw .error { message: "Infinite loop bug" }
             let r = this.reader
             if r.read_byte() == 0 : break
-            r.back(1)
+            r.rewind(1)
             // Check error
             this.check_error() !>
             // Check auth switch
@@ -93,7 +93,7 @@ use valk:time
         let r = this.reader
         let header = r.read_byte()
         if header != 0xFF {
-            r.back(1)
+            r.rewind(1)
             return
         }
         // Disable fetch
@@ -110,16 +110,19 @@ use valk:time
             r.skip(5)
         }
 
-        throw .error { message: r.read_string_all() }
+        throw .error { message: r.read_remaining_string() }
     }
 
     fn recv() !Error {
+        @unsafe
         let start : uint = 0
-        if this.debug : start = time:microtime()
+        if this.debug : start = time.mono_us()
 
         let buf = this.data_in
         let recv_bytes : uint = buf.length
-        if recv_bytes < 4 : recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
+        while recv_bytes < 4 {
+            recv_bytes += this.recv_into_buffer() !>
+        }
         if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
         //
         let data = buf.data.@cast(ptr)
@@ -129,47 +132,55 @@ use valk:time
         data += 1
         // Read more if needed
         while recv_bytes < (payload_len + 4) {
-            recv_bytes += this.con.recv(buf, 1024) ! throw .error { message: "Failed to read bytes from socket" }
+            recv_bytes += this.recv_into_buffer() !>
         }
         //
         this.reader.reset()
-        this.reader.buf.clear()
-        this.reader.buf.write_buffer_part(buf, payload_len, 4)
+        this.reader.source = buf.to_slice().view(4, payload_len).to_string().to_slice()
         buf.clear_until(payload_len + 4)
         //
         if this.debug {
             println("RECV SEQ ID: " + (this.seqid - 1))
-            if this.debug_bytes : this.reader.buf.data.@cast(ptr).print_bytes(this.reader.buf.length)
-            println("Time needed to read: " + ((time:microtime() - start) / 1000) + "ms")
+            if this.debug_bytes : this.reader.source.data.@cast(ptr).print_bytes(this.reader.source.length)
+            println("Time needed to read: " + ((time.mono_us() - start) / 1000) + "ms")
             println("------")
         }
     }
 
+    fn recv_into_buffer() uint !Error {
+        let data = String.alloc(1024).to_slice()
+        let count = this.con.read(data) ! throw .error { message: "Failed to read bytes from socket" }
+        if count == 0 : throw .error { message: "MySQL server closed the connection" }
+        this.data_in.write(data.view(0, count))
+        return count
+    }
+
     fn send() !Error {
+        @unsafe
         let s = this.sender
         let pb = this.packetbuf
         let id = (this.seqid++)
         pb.clear()
-        pb.reserve_space(4)
+        pb.reserve(4)
         let len = s.length
         write_int3(pb.data, len)
-        pb.length += 3
+        pb.advance(3)
         write_int1(pb.data.@offset(pb.length), id)
-        pb.length += 1
-        pb.write_buffer(s)
+        pb.advance(1)
+        pb.write(s)
         s.clear() // Clear send data
         //
         let start : uint = 0
         if this.debug {
-            start = time:microtime()
+            start = time.mono_us()
             println("SEND SEQ ID: " + id)
             if this.debug_bytes : pb.data.@cast(ptr).print_bytes(pb.length)
         }
         //
-        this.con.send_buffer(pb, 0, true) ! throw .error { message: "Failed to send bytes to server" }
+        this.con.write(pb.to_slice()) ! throw .error { message: "Failed to send bytes to server" }
         //
         if this.debug {
-            println("Time needed to send: " + ((time:microtime() - start) / 1000) + "ms")
+            println("Time needed to send: " + ((time.mono_us() - start) / 1000) + "ms")
             println("------")
         }
     }
@@ -185,6 +196,6 @@ use valk:time
     + fn close() {
         if this.closed : return
         this.closed = true
-        this.con.close()
+        this.con.close() ! {}
     }
 }

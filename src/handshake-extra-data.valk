@@ -2,7 +2,7 @@
 extern fn RSA_public_encrypt(len: i32, in: ptr, out: ptr, rsa_public_key: cstring, padding: i32) i32;
 extern fn RSA_size(rsa: ptr) i32;
 extern fn BIO_new_mem_buf(buf: ptr, len: i32) ?ptr;
-extern fn PEM_read_bio_RSA_PUBKEY(bp: ptr, x: ?&ptr, cb: ?ptr, u: ?ptr) ?ptr;
+extern fn PEM_read_bio_RSA_PUBKEY(bp: ptr, x: ?ptr, cb: ?ptr, u: ?ptr) ?ptr;
 extern fn BIO_free(bp: ptr);
 
 value RSA_PKCS1_OAEP_PADDING (4)
@@ -10,9 +10,10 @@ value RSA_PKCS1_OAEP_PADDING (4)
 extend Connection {
 
     fn handshake_extra_data() bool !Error {
+        @unsafe
         let r = this.reader
         if r.read_byte() != 0x01 {
-            r.back(1)
+            r.rewind(1)
             return false
         }
         // Further auth data required
@@ -27,7 +28,7 @@ extend Connection {
                 if this.ssl_enabled {
                     // Send plain password + 0x00 byte
                     let s = this.sender
-                    s.write_string(this.password)
+                    s.write(this.password)
                     s.write_byte(0)
                     this.send() !>
                     // Receive OK
@@ -45,29 +46,31 @@ extend Connection {
                     this.recv() !>
                     this.check_error() !>
                     if r.read_byte() != 0x01 : throw .error { message: "Invalid RSA key response from the mysql server" }
-                    key = r.read_string_all()
+                    key = r.read_remaining_string()
                     this.rsa_public_key = key
                 }
                 // Step 2. Encrypt password
                 let bio = BIO_new_mem_buf(key.data, key.length.to(i32))
+                if !isset(bio) : throw .error { message: "Failed to allocate RSA key buffer" }
                 let rsa = PEM_read_bio_RSA_PUBKEY(bio, null, null, null)
                 BIO_free(bio)
+                if !isset(rsa) : throw .error { message: "Failed to parse MySQL RSA public key" }
                 // Prepare input
                 let scramble = this.salt
                 let scramble_len = scramble.length
-                let in = String.make_from_ptr(this.password.data, this.password.length + 1) // len + 1 to include 0x00
+                let in = String.copy_from_ptr(this.password.data, this.password.length + 1) // len + 1 to include 0x00
                 let in_data = in.data
                 each in as ch, i {
                     @ptrv(in_data, u8, i) = ch ^ scramble[i % scramble_len]
                 }
                 // Encrypt
                 let out_len = RSA_size(rsa)
-                let out = String.make_empty(out_len)
+                let out = String.alloc(out_len)
                 let res = RSA_public_encrypt(in.length.to(i32), in_data, out.data, rsa, RSA_PKCS1_OAEP_PADDING)
                 if res <= 0 : throw .error { message: "Failed to encrypt password using the mysql RSA public key" }
                 // Step 3. Send encrypted password
                 let s = this.sender
-                s.write_string(out)
+                s.write(out)
                 this.send() !>
                 // Receive OK
                 this.recv() !>

@@ -29,13 +29,13 @@ extend Connection {
         s.fill(0x00, 23)
 
         // Username
-        s.write_string(username)
+        s.write(username)
         s.write_byte(0)
 
         // Auth response (doesnt work for mariadb)
         if scaps & CAP.CLIENT_MYSQL > 0 {
             s.write_int_encoded(auth_response.length)
-            s.write_string(auth_response)
+            s.write(auth_response)
         } else {
             // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
             // The server will respond with a auth-switch reply and if you send the auth-response there, it will work
@@ -44,12 +44,12 @@ extend Connection {
 
         if isset(db) && ccaps & CAP.CLIENT_CONNECT_WITH_DB > 0 {
             // DB name - null terminated string
-            s.write_string(db)
+            s.write(db)
             s.write_byte(0)
         }
         if ccaps & CAP.CLIENT_PLUGIN_AUTH > 0 {
             // Auth plugin - null terminated string
-            s.write_string(auth_plugin_name)
+            s.write(auth_plugin_name)
             s.write_byte(0)
         }
         if ccaps & CAP.CLIENT_CONNECT_ATTRS > 0 {

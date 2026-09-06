@@ -1,0 +1,28 @@
+@ignore_access
+
+use mysql
+use valk.json
+
+test "Value conversions" {
+    assert(mysql.convert(42).to_int() == 42)
+    assert(mysql.convert(true).to_bool())
+    assert(mysql.convert(1.25).to_string() == "1.250")
+    assert(mysql.convert("42").to_int() == 42)
+    assert(mysql.convert("1.25").to_float() == 1.25)
+    let missing: ?uint = null
+    assert(mysql.convert(missing).type == mysql.TYPE.null)
+    let present: ?uint = 7
+    assert(mysql.convert(present).to_int() == 7)
+    let array = mysql.convert(Array[?uint]{ 1, null, 3 })
+    let items = array.array_items
+    assert(isset(items))
+    if isset(items) {
+        assert(items.length == 3)
+        assert((items.get(0) ! panic("Missing item")).to_int() == 1)
+        assert((items.get(1) ! panic("Missing item")).type == mysql.TYPE.null)
+    }
+    assert(mysql.convert(42).to_json().encode() == "42")
+    assert(mysql.convert("{\"a\":1}").to_json().encode() == "{\"a\":1}")
+    let value: json.Value = json.new_int(7)
+    assert(value.to_mysql_value().to_string() == "7")
+}

@@ -1,5 +1,5 @@
 
-use valk:net
+use valk.net
 
 extend Connection {
 
@@ -26,7 +26,7 @@ extend Connection {
         this.send() !>
         this.check_error() !>
 
-        let ssl = net:SSL.new()
+        let ssl = net.Ssl.new()
         ssl.set_verify(false)
 
         this.con.ssl_connect(ssl) ! {

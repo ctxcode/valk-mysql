@@ -1,49 +1,58 @@
 
 fn write_int1(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 1)
 }
 fn write_int2(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 2)
 }
 fn write_int3(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 3)
 }
 fn write_int4(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 4)
 }
 fn write_int6(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 6)
 }
 fn write_int8(to: ptr, v: uint) {
+    @unsafe
     write_int(to.@cast(*[u8]), v, 8)
 }
-fn write_int(to: ptr[u8], v: uint, bytes: u8) {
+fn write_int(to: *[u8], v: uint, bytes: u8) {
+    @unsafe
     let i = 0
     while i < bytes {
         to[i++] = (v & 0xFF).to(u8)
         v = v >> 8
     }
 }
-fn write_int_encoded(to: ptr[u8], v: uint) uint {
+fn write_int_encoded(to: *[u8], v: uint) uint {
+    @unsafe
     if v <= 250 {
         to[0] = v.to(u8)
         return 1
     }
     if v < (2 << 16) {
         to[0] = 0xFC
-        write_int(to[1], v, 2)
+        write_int(to.@offset(1), v, 2)
         return 3
     }
     if v < (3 << 16) {
         to[0] = 0xFD
-        write_int(to[1], v, 3)
+        write_int(to.@offset(1), v, 3)
         return 4
     }
     to[0] = 0xFE
-    write_int(to[1], v, 8)
+    write_int(to.@offset(1), v, 8)
     return 9
 }
 fn read_int(from: ptr, bytes: u8) uint {
+    @unsafe
     let v : uint = 0
     let sh : uint = 0
     let i = 0
@@ -54,6 +63,7 @@ fn read_int(from: ptr, bytes: u8) uint {
     return v
 }
 fn read_int_enc(from: ptr) (uint, uint) {
+    @unsafe
     let v = read_int(from, 1)
     if v <= 250 {
         return (v, 1)
@@ -78,15 +88,17 @@ fn read_int_enc(from: ptr) (uint, uint) {
 
 extend ByteReader {
     + fn read_int_enc() uint {
-        let v, bytes = read_int_enc(this.buf.data.@offset(this.pos))
+        @unsafe
+        let v, bytes = read_int_enc(this.source.data.@offset(this.pos))
         this.skip(bytes)
         return v
     }
 }
 extend ByteBuffer {
     + fn write_int_encoded(v: uint) uint {
-        this.reserve_space(8)
-        this.length += write_int_encoded(this.data.@offset(this.length), v)
+        @unsafe
+        this.reserve(9)
+        this.advance(write_int_encoded(this.data.@offset(this.length), v))
         return v
     }
 }

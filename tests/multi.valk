@@ -34,12 +34,12 @@ test "Multi Statement" {
     assert(r1.length == 3)
     r1.get(0) -> v {
       assert(v.length == 2) // columns
-      v.get(0) -> cv : assert(cv == "1")
-      v.get(1) -> cv : assert(cv == "v1")
+      v.get("id") -> cv : assert(cv.to_string() == "1")
+      v.get("name") -> cv : assert(cv.to_string() == "v1")
     }
     r1.get(2) -> v {
       assert(v.length == 2) // columns
-      v.get(0) -> cv : assert(cv == "3")
-      v.get(1) -> cv : assert(cv == "v3")
+      v.get("id") -> cv : assert(cv.to_string() == "3")
+      v.get("name") -> cv : assert(cv.to_string() == "v3")
     }
 }

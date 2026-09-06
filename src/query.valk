@@ -1,5 +1,5 @@
 
-use valk:time
+use valk.time
 
 class Statement {
     id: uint
@@ -61,7 +61,7 @@ extend Connection {
         this.named_binds.clear()
     }
     + fn clear_old_statements() {
-        let now = time:microtime()
+        let now = time.mono_us()
         let old = now - (3 * 1000 * 1000) // - 3 seconds
         let ss = this.statements
         each ss as statement, k {
@@ -158,7 +158,7 @@ extend Connection {
     fn send_com_query(q: String) !Error {
         let s = this.sender
         s.write_byte(0x03)
-        s.write_string(q)
+        s.write(q)
         // Send
         this.seqid = 0
         this.send() !>
@@ -172,7 +172,7 @@ extend Connection {
             this.column_types = stmt.column_types
             this.column_count = stmt.column_count
             this.param_count = stmt.param_count
-            stmt.last_used = time:microtime()
+            stmt.last_used = time.mono_us()
             return
         }
 
@@ -181,7 +181,7 @@ extend Connection {
         this.seqid = 0
         s.write_byte(0x16)
         // EofString
-        s.write_string(q)
+        s.write(q)
         // Send
         this.send() !>
         // Read response
@@ -200,7 +200,7 @@ extend Connection {
         // Filler
         r.skip(1)
         // Warnings
-        if r.buf.length > 12 {
+        if r.source.length > 12 {
             let warn_count = r.read_u16_le()
         }
 
@@ -213,14 +213,15 @@ extend Connection {
             id: this.statement_id
             column_count: this.column_count
             param_count: this.param_count
-            column_names: this.column_names.copy()
-            column_types: this.column_types.copy()
-            last_used: time:microtime()
+            column_names: this.column_names.clone()
+            column_types: this.column_types.clone()
+            last_used: time.mono_us()
         }
         this.statements.set(q, stmt)
     }
 
     fn send_prep_query(q: String) !Error {
+        @unsafe
         // Prepare
         this.prepare(q) !>
         // Execute
@@ -250,7 +251,7 @@ extend Connection {
             byte = byte | (1 << bit_pos)
             @ptrv(null_data, u8, byte_pos) = byte
         }
-        s.skip(null_bytec)
+        s.advance(null_bytec)
         // new_params_bind_flag
         s.write_byte(1)
         // Write types
@@ -276,7 +277,7 @@ extend Connection {
             //
             if bind.type == TYPE.string {
                 s.write_int_encoded(bind.string_value.length)
-                s.write_string(bind.string_value)
+                s.write(bind.string_value)
             } else if bind.type == TYPE.int {
                 s.write_u64_le(bind.int_value)
             } else if bind.type == TYPE.float {
@@ -334,7 +335,7 @@ extend Connection {
         let result = Array[Map[Value]]{}
         let row : Map[Value] = .{}
         while this.fetch_row(row) !> {
-            result.append(row.copy())
+            result.append(row.clone())
         }
         return result
     }
@@ -367,7 +368,7 @@ extend Connection {
             this.stop_query()
             return false
         }
-        r.back(1)
+        r.rewind(1)
 
         if this.is_statement {
             return this.fetch_binary_resultset(row) !>
@@ -376,11 +377,12 @@ extend Connection {
     }
 
     fn fetch_binary_resultset(row: Map[Value]) bool !Error {
+        @unsafe
         row.clear()
         let r = this.reader
         r.skip(1) // Skip header byte (0x00)
         // Null data
-        let null_data = this.reader.buf.data.@offset(this.reader.pos)
+        let null_data = this.reader.source.data.@offset(this.reader.pos)
         let column_count = this.column_count
         let column_names = this.column_names
         let column_types = this.column_types
@@ -415,10 +417,10 @@ extend Connection {
                 let v = r.read_u64_le().to(int)
                 row.set(name, v)
             } else if type == FIELD_TYPE.FLOAT {
-                let v = r.buf.data.@offset(r.pos).read_float(4) !? 0.0
+                let v = r.source.data.@offset(r.pos).read_float(4) !? 0.0
                 row.set(name, v)
             } else if type == FIELD_TYPE.DOUBLE {
-                let v = r.buf.data.@offset(r.pos).read_float(8) !? 0.0
+                let v = r.source.data.@offset(r.pos).read_float(8) !? 0.0
                 row.set(name, v)
             } else if type == FIELD_TYPE.STRING || type == FIELD_TYPE.VARCHAR || type == FIELD_TYPE.VAR_STRING || type == FIELD_TYPE.ENUM || type == FIELD_TYPE.SET || type == FIELD_TYPE.LONG_BLOB || type == FIELD_TYPE.MEDIUM_BLOB || type == FIELD_TYPE.BLOB || type == FIELD_TYPE.TINY_BLOB || type == FIELD_TYPE.GEOMETRY || type == FIELD_TYPE.BIT || type == FIELD_TYPE.DECIMAL || type == FIELD_TYPE.NEWDECIMAL || type == FIELD_TYPE.JSON {
                 let strlen = r.read_int_enc()
@@ -481,7 +483,8 @@ extend Connection {
                 if len == 12 {
                     usec = r.read_u32_le()
                 }
-                let time = "%{negative ? "-" : ""}%{days}d %{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
+                let sign = negative ? "-" : ""
+                let time = "%{sign}%{days}d %{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
                 if len < 12 {
                     row.set(name, time)
                 } else {

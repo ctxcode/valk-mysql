@@ -1,13 +1,13 @@
 
 use mysql
 
-fn connect() mysql:Connection !mysql:Error {
+fn connect() mysql.Connection !mysql.Error {
 
-    let con = mysql:connect("127.0.0.1", "test", "root", null, 3306) !>
+    let con = mysql.connect("127.0.0.1", "test", "root", null, 3306) !>
     con.query("CREATE DATABASE IF NOT EXISTS `valk_mysql_tests` /*!40100 COLLATE 'utf8mb4_unicode_ci' */;")
     con.query("USE valk_mysql_tests;")
 
-    // let con = mysql:connect("127.0.0.1", "test", "root", "valk", 3306) !>
+    // let con = mysql.connect("127.0.0.1", "test", "root", "valk", 3306) !>
     // con.debug = true
     return con
 }

@@ -1,14 +1,13 @@
 
-# vc=valk
-vc=~/www/valk/valk
+vc ?= valk
 
 test:
-	$(vc) build ./tests -t -r
+	$(vc) build ./tests --test --run
 test-basic:
-	$(vc) build ./tests -t -r --filter "basic"
+	$(vc) build ./tests --test --run --filter "basic"
 test-multi:
-	$(vc) build ./tests -t -r --filter "multi"
+	$(vc) build ./tests --test --run --filter "multi"
 example:
-	cd example && vman install && $(vc) build main.valk -r
+	$(vc) build ./example --run
 
-.PHONY: example
+.PHONY: test test-basic test-multi example

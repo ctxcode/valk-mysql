@@ -1,5 +1,5 @@
 
-use valk:json
+use valk.json
 
 + enum TYPE {
     null
@@ -28,7 +28,7 @@ use valk:json
         let type = this.type
         if type == TYPE.string : return this.string_value
         if type == TYPE.int : return this.int_value.to_base(10)
-        if type == TYPE.float : return this.float_value.to_str(3)
+        if type == TYPE.float : return this.float_value.to_string(3)
         return this.string_value
     }
 
@@ -48,12 +48,12 @@ use valk:json
         return this.float_value
     }
 
-    + fn to_json() json:Value $auto {
+    + fn to_json() json.Value $auto {
         let type = this.type
-        if type == TYPE.string : return json:decode(this.string_value) !? json:new_null()
-        if type == TYPE.float : return json:new_float(this.float_value)
-        if type == TYPE.int : return json:new_int(this.int_value)
-        return json:new_null()
+        if type == TYPE.string : return json.decode(this.string_value) !? json.new_null()
+        if type == TYPE.float : return json.new_float(this.float_value)
+        if type == TYPE.int : return json.new_int(this.int_value)
+        return json.new_null()
     }
 
     + static fn null() Value {
@@ -78,7 +78,7 @@ use valk:json
         if this.type == TYPE.null : return null
         return this.to_float()
     }
-    + fn to_json_or_null() ?json:Value $auto {
+    + fn to_json_or_null() ?json.Value $auto {
         if this.type == TYPE.null : return null
         return this.to_json()
     }
@@ -124,7 +124,7 @@ extend float {
         }
     }
 }
-extend json:Value {
+extend json.Value {
     + fn to_mysql_value() Value $auto {
         return Value {
             type: TYPE.string
@@ -135,7 +135,7 @@ extend json:Value {
 
 extend Array[T] {
     + fn to_mysql_value() Value $auto {
-        #if type_can_convert_to(T, Value)
+        #if T.$can_convert_to(Value)
         if this.length == 0 : return Value { type: TYPE.array }
         let items = Array[Value].new(this.length)
         each this as v {
@@ -151,31 +151,31 @@ extend Array[T] {
     }
 }
 
-+ fn convert(ndata: $T) Value $auto {
++ fn convert(ndata: $T) Value {
 
-    #if is_nullable_type(T)
+    #if T.$is_nullable
     if !isset(ndata) : return Value { type: TYPE.null }
     #end
 
-    let data : notnull(T) = ndata
+    let data = ndata
 
-    #if is_type_of_class(T, Value)
+    #if T.$is_type_of(Value)
     return data
-    #elif type_can_convert_to(T, Value)
+    #elif T.$can_convert_to(Value)
     return data.to(Value)
-    #elif type_has_method(T, to_json_value)
+    #elif T.$has_method(to_mysql_value)
     return data.to_mysql_value()
-    #elif is_integer_type(T)
+    #elif T.$is_integer
     return Value { 
         type: TYPE.int
         int_value: data.to(int)
     }
-    #elif is_float_type(T)
+    #elif T.$is_float
     return Value { 
         type: TYPE.float
         float_value: data.to(float)
     }
-    #elif is_bool_type(T)
+    #elif T.$is_bool
     return Value { 
         type: TYPE.int
         int_value: data ? 1 : 0
