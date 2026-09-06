@@ -1,9 +1,11 @@
 {
+    "src": ".",
     "dependencies": {
         "mysql": {
             "src": "github.com/ctxcode/valk-mysql",
-            "version": "0.0.2",
-            "update": "0.0.x"
+            "version": "0.2.x",
+            "current": "0.2.1",
+            "current_hash": "ab73d4d2a90bada22a3ea7acef8d57deaab14ce5"
         }
     }
 }
