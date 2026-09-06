@@ -221,7 +221,6 @@ extend Connection {
     }
 
     fn send_prep_query(q: String) !Error {
-        @unsafe
         // Prepare
         this.prepare(q) !>
         // Execute
@@ -238,20 +237,17 @@ extend Connection {
         s.write_u32_le(1)
         // Null bitmap
         let null_bytec = (param_count + 7) / 8
-        s.clear_next_bytes(null_bytec)
-        let null_data = s.data.@offset(s.length)
+        let null_start = s.length
+        s.fill(0, null_bytec)
         let binds = this.final_binds
         let i : uint = 0
         while i < param_count {
             let bind = binds.get(i++) ! throw .error { message: "Missing bind values" }
             if bind.type != TYPE.null : continue
-            let byte_pos = (i - 1) / 8
+            let byte_pos = null_start + (i - 1) / 8
             let bit_pos = ((i - 1) % 8).to(u8)
-            let byte = @ptrv(null_data, u8, byte_pos)
-            byte = byte | (1 << bit_pos)
-            @ptrv(null_data, u8, byte_pos) = byte
+            s[byte_pos] = s[byte_pos] | (1 << bit_pos)
         }
-        s.advance(null_bytec)
         // new_params_bind_flag
         s.write_byte(1)
         // Write types
@@ -377,16 +373,16 @@ extend Connection {
     }
 
     fn fetch_binary_resultset(row: Map[Value]) bool !Error {
-        @unsafe
         row.clear()
         let r = this.reader
         r.skip(1) // Skip header byte (0x00)
-        // Null data
-        let null_data = this.reader.source.data.@offset(this.reader.pos)
+        // Null bitmap (2 reserved bits, then 1 bit per column)
         let column_count = this.column_count
         let column_names = this.column_names
         let column_types = this.column_types
         let null_bytec = (column_count + 7 + 2) / 8
+        let null_data = r.source
+        let null_start = r.pos
         r.skip(null_bytec)
         //
         let i : uint = 0
@@ -397,7 +393,7 @@ extend Connection {
             let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             // Check if is null
-            let byte = @ptrv(null_data, u8, byte_pos)
+            let byte = null_data.get(null_start + byte_pos) !? 0
             let is_null = (byte & (1 << bit_pos)) > 0
             if is_null {
                 row.set(name, Value.null())
@@ -417,10 +413,10 @@ extend Connection {
                 let v = r.read_u64_le().to(int)
                 row.set(name, v)
             } else if type == FIELD_TYPE.FLOAT {
-                let v = r.source.data.@offset(r.pos).read_float(4) !? 0.0
+                let v : float = f32_from_bits(r.read_u32_le()).to(float)
                 row.set(name, v)
             } else if type == FIELD_TYPE.DOUBLE {
-                let v = r.source.data.@offset(r.pos).read_float(8) !? 0.0
+                let v : float = f64_from_bits(r.read_u64_le()).to(float)
                 row.set(name, v)
             } else if type == FIELD_TYPE.STRING || type == FIELD_TYPE.VARCHAR || type == FIELD_TYPE.VAR_STRING || type == FIELD_TYPE.ENUM || type == FIELD_TYPE.SET || type == FIELD_TYPE.LONG_BLOB || type == FIELD_TYPE.MEDIUM_BLOB || type == FIELD_TYPE.BLOB || type == FIELD_TYPE.TINY_BLOB || type == FIELD_TYPE.GEOMETRY || type == FIELD_TYPE.BIT || type == FIELD_TYPE.DECIMAL || type == FIELD_TYPE.NEWDECIMAL || type == FIELD_TYPE.JSON {
                 let strlen = r.read_int_enc()

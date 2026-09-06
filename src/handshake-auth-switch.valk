@@ -17,8 +17,7 @@ extend Connection {
         this.salt = salt
 
         this.check_auth_method() !>
-        let auth_response = this.auth_response()
-        this.sender.write(auth_response)
+        this.write_auth_response(this.sender)
 
         this.send() !>
         this.recv() !>

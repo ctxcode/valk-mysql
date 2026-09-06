@@ -36,10 +36,13 @@ use valk.time
     db: ?String
     // Data in
     data_in: ByteBuffer (.new())
+    packet_end: uint (0) // End of the packet `reader` currently views inside data_in (compacted on next recv)
     reader: ByteReader
     // Data out
     packetbuf: ByteBuffer (.new())
     sender: ByteBuffer (.new())
+    querybuf: ByteBuffer (.new()) // Reused when rewriting named parameters
+    recv_scratch: String (String.alloc(1024)) // Reused socket read buffer
     //
     seqid: u8 (0)
     // Connection info
@@ -114,41 +117,47 @@ use valk.time
     }
 
     fn recv() !Error {
-        @unsafe
         let start : uint = 0
         if this.debug : start = time.mono_us()
 
         let buf = this.data_in
+        // Drop the previous packet now that nothing reads from it anymore
+        if this.packet_end > 0 {
+            buf.clear_until(this.packet_end)
+            this.packet_end = 0
+        }
         let recv_bytes : uint = buf.length
         while recv_bytes < 4 {
             recv_bytes += this.recv_into_buffer() !>
         }
         if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
         //
-        let data = buf.data.@cast(ptr)
-        let payload_len : uint = read_int(data, 3)
-        data += 3
-        this.seqid = read_int(data, 1).to(u8) + 1
-        data += 1
+        // Packet header: 3 byte little-endian payload length + 1 byte sequence id
+        let r = this.reader
+        r.reset()
+        r.source = buf
+        let payload_len : uint = r.read_little_endian(3)
+        this.seqid = r.read_byte() + 1
         // Read more if needed
         while recv_bytes < (payload_len + 4) {
             recv_bytes += this.recv_into_buffer() !>
         }
         //
-        this.reader.reset()
-        this.reader.source = buf.to_slice().view(4, payload_len).to_string().to_slice()
-        buf.clear_until(payload_len + 4)
+        // Point the reader at the payload in place; the copy-free view stays valid until the next recv()
+        r.reset()
+        r.source = buf.view(4, payload_len)
+        this.packet_end = payload_len + 4
         //
         if this.debug {
             println("RECV SEQ ID: " + (this.seqid - 1))
-            if this.debug_bytes : this.reader.source.data.@cast(ptr).print_bytes(this.reader.source.length)
+            if this.debug_bytes : print_bytes(this.reader.source)
             println("Time needed to read: " + ((time.mono_us() - start) / 1000) + "ms")
             println("------")
         }
     }
 
     fn recv_into_buffer() uint !Error {
-        let data = String.alloc(1024).to_slice()
+        let data = this.recv_scratch.to_slice()
         let count = this.con.read(data) ! throw .error { message: "Failed to read bytes from socket" }
         if count == 0 : throw .error { message: "MySQL server closed the connection" }
         this.data_in.write(data.view(0, count))
@@ -156,17 +165,12 @@ use valk.time
     }
 
     fn send() !Error {
-        @unsafe
         let s = this.sender
         let pb = this.packetbuf
         let id = (this.seqid++)
         pb.clear()
-        pb.reserve(4)
-        let len = s.length
-        write_int3(pb.data, len)
-        pb.advance(3)
-        write_int1(pb.data.@offset(pb.length), id)
-        pb.advance(1)
+        pb.write_little_endian(s.length, 3)
+        pb.write_byte(id)
         pb.write(s)
         s.clear() // Clear send data
         //
@@ -174,10 +178,10 @@ use valk.time
         if this.debug {
             start = time.mono_us()
             println("SEND SEQ ID: " + id)
-            if this.debug_bytes : pb.data.@cast(ptr).print_bytes(pb.length)
+            if this.debug_bytes : print_bytes(pb)
         }
         //
-        this.con.write(pb.to_slice()) ! throw .error { message: "Failed to send bytes to server" }
+        this.con.write(pb) ! throw .error { message: "Failed to send bytes to server" }
         //
         if this.debug {
             println("Time needed to send: " + ((time.mono_us() - start) / 1000) + "ms")

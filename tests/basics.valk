@@ -97,4 +97,23 @@ test "Basics" {
 
     assert(((time.mono_us() - start) / 1000) < 10)
     start = time.mono_us()
+
+    // Binary protocol: FLOAT / DOUBLE columns and NULL binds
+    con.query("DROP TABLE IF EXISTS numbers") ! { assert(false) return }
+    con.query("CREATE TABLE numbers (`id` int NOT NULL AUTO_INCREMENT, `f` float DEFAULT NULL, `d` double DEFAULT NULL, PRIMARY KEY (`id`))") ! {
+      println(E.message)
+      assert(false)
+      return
+    }
+    con.query("INSERT INTO numbers (f, d) VALUES (:f, :d)", .{ "f" => 1.5, "d" => -2.25 }) ! { println(E.message) assert(false) return }
+    con.query("INSERT INTO numbers (f, d) VALUES (:f, :d)", .{ "f" => null, "d" => 10000000000.0 }) ! { println(E.message) assert(false) return }
+    con.query("SELECT * FROM numbers WHERE id > :id ORDER BY id", .{ "id" => 0 }) ! { println(E.message) assert(false) return }
+    r = con.fetch_all() ! { assert(false) return }
+    assert(r.length == 2)
+    let row1 = r.get(0) ! { assert(false) return }
+    let row2 = r.get(1) ! { assert(false) return }
+    assert((row1["f"] ?? 0.0).to_float() == 1.5)
+    assert((row1["d"] ?? 0.0).to_float() == -2.25)
+    assert(!isset((row2["f"] ?? 0.0).to_float_or_null()))
+    assert((row2["d"] ?? 0.0).to_float() == 10000000000.0)
 }

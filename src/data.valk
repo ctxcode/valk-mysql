@@ -1,104 +1,50 @@
-
-fn write_int1(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 1)
-}
-fn write_int2(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 2)
-}
-fn write_int3(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 3)
-}
-fn write_int4(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 4)
-}
-fn write_int6(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 6)
-}
-fn write_int8(to: ptr, v: uint) {
-    @unsafe
-    write_int(to.@cast(*[u8]), v, 8)
-}
-fn write_int(to: *[u8], v: uint, bytes: u8) {
-    @unsafe
-    let i = 0
-    while i < bytes {
-        to[i++] = (v & 0xFF).to(u8)
-        v = v >> 8
-    }
-}
-fn write_int_encoded(to: *[u8], v: uint) uint {
-    @unsafe
-    if v <= 250 {
-        to[0] = v.to(u8)
-        return 1
-    }
-    if v < (2 << 16) {
-        to[0] = 0xFC
-        write_int(to.@offset(1), v, 2)
-        return 3
-    }
-    if v < (3 << 16) {
-        to[0] = 0xFD
-        write_int(to.@offset(1), v, 3)
-        return 4
-    }
-    to[0] = 0xFE
-    write_int(to.@offset(1), v, 8)
-    return 9
-}
-fn read_int(from: ptr, bytes: u8) uint {
-    @unsafe
-    let v : uint = 0
-    let sh : uint = 0
-    let i = 0
-    while i < bytes {
-        v = v | (@ptrv(from, u8, i++).to(uint) << sh)
-        sh += 8
-    }
-    return v
-}
-fn read_int_enc(from: ptr) (uint, uint) {
-    @unsafe
-    let v = read_int(from, 1)
-    if v <= 250 {
-        return (v, 1)
-    }
-    if v == 0xFB {
-        return (v, 1)
-    }
-    if v == 0xFC {
-        from += 1
-        v = read_int(from, 2)
-        return (v, 3)
-    }
-    if v == 0xFD {
-        from += 1
-        v = read_int(from, 3)
-        return (v, 4)
-    }
-    from += 1
-    v = read_int(from, 8)
-    return (v, 9)
-}
+// MySQL length-encoded integers, built on the bounds-checked ByteBuffer/ByteReader APIs
 
 extend ByteReader {
     + fn read_int_enc() uint {
-        @unsafe
-        let v, bytes = read_int_enc(this.source.data.@offset(this.pos))
-        this.skip(bytes)
+        let v = this.read_byte().to(uint)
+        if v <= 250 : return v
+        if v == 0xFB : return v // NULL marker
+        if v == 0xFC : return this.read_little_endian(2)
+        if v == 0xFD : return this.read_little_endian(3)
+        return this.read_little_endian(8)
+    }
+}
+
+extend ByteBuffer {
+    + fn write_int_encoded(v: uint) uint {
+        if v <= 250 {
+            this.write_byte(v.to(u8))
+        } else if v < (1 << 16) {
+            this.write_byte(0xFC)
+            this.write_little_endian(v, 2)
+        } else if v < (1 << 24) {
+            this.write_byte(0xFD)
+            this.write_little_endian(v, 3)
+        } else {
+            this.write_byte(0xFE)
+            this.write_little_endian(v, 8)
+        }
         return v
     }
 }
-extend ByteBuffer {
-    + fn write_int_encoded(v: uint) uint {
-        @unsafe
-        this.reserve(9)
-        this.advance(write_int_encoded(this.data.@offset(this.length), v))
-        return v
+
+// Debug helper: prints bytes as "0x..,0x.." like ptr.print_bytes, without raw pointers
+fn print_bytes(data: Slice[u8]) {
+    let len = data.length
+    let i : uint = 0
+    while i < len {
+        print("0x")
+        (data.get(i) !? 0).print(16)
+        if ++i < len : print(",")
     }
+    print("\n")
+}
+
+// IEEE-754 bit patterns -> floats (binary protocol FLOAT/DOUBLE columns)
+fn f32_from_bits(bits: u32) f32 {
+    return @ptrv(&bits, f32)
+}
+fn f64_from_bits(bits: u64) f64 {
+    return @ptrv(&bits, f64)
 }

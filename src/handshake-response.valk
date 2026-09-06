@@ -11,7 +11,6 @@ extend Connection {
         //
         let ccharset : u8 = 45 // utf8mb4_general_ci
         let auth_plugin_name = this.auth_plugin
-        let auth_response = this.auth_response()
 
         // Write resp
         let s = this.sender
@@ -34,8 +33,11 @@ extend Connection {
 
         // Auth response (doesnt work for mariadb)
         if scaps & CAP.CLIENT_MYSQL > 0 {
-            s.write_int_encoded(auth_response.length)
-            s.write(auth_response)
+            // Length-encoded: responses are < 251 bytes, so a single length byte prefix
+            let len_pos = s.length
+            s.write_byte(0)
+            this.write_auth_response(s)
+            s[len_pos] = (s.length - len_pos - 1).to(u8)
         } else {
             // Always send a 0x00 byte instead because this is the only thing mariadb will accept even if the docs claim otherwise
             // The server will respond with a auth-switch reply and if you send the auth-response there, it will work

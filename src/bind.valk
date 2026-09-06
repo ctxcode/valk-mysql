@@ -16,7 +16,8 @@ extend Connection {
     }
 
     + fn replace_named_params(query: String) String !Error {
-        let r = core.ByteBuffer.new()
+        let r = this.querybuf
+        r.clear()
         let str_mode = false
         let ignore_next = false
         let binds = this.binds

@@ -3,8 +3,8 @@ use valk.crypto
 
 extend Connection {
 
-    fn auth_response() String {
-        @unsafe
+    // Writes the auth response bytes for the current auth plugin into `to` (no allocations)
+    fn write_auth_response(to: ByteBuffer) {
         let method = this.auth_plugin
         if method == "mysql_native_password" {
             let hash = crypto.Sha1{}
@@ -21,14 +21,12 @@ extend Connection {
             hash.add_hash_data(@ref(hash2))
             let hash3 = hash.final()
 
-            let auth_response : [u8 x 20] = { 0... }
             let i : uint = 0
             while i < 20 {
-                auth_response[i] = hash1[i] ^ hash3[i]
+                to.write_byte(hash1[i] ^ hash3[i])
                 i++
             }
-
-            return String.copy_from_ptr(@ref(auth_response), 20)
+            return
 
         } else if method == "caching_sha2_password" {
             let hash = crypto.Sha256{}
@@ -41,13 +39,12 @@ extend Connection {
             hash.add_hash_data(@ref(hash2))
             hash.add_string_data(this.salt)
             let hash3 = hash.final()
-            let auth_response : [u8 x 32] = { 0... }
             let i : uint = 0
             while i < 32 {
-                auth_response[i] = hash1[i] ^ hash3[i]
+                to.write_byte(hash1[i] ^ hash3[i])
                 i++
             }
-            return String.copy_from_ptr(@ref(auth_response), 32)
+            return
         }
         panic("Bug: Unhandled MySQL authentication method: " + method)
     }
