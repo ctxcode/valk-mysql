@@ -400,29 +400,29 @@ extend Connection {
                 continue
             }
             //
-            if type == FIELD_TYPE.TINY {
+            if type == FIELD_TYPE.TINY.to(uint) {
                 let v = r.read_byte().to(int)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.SHORT || type == FIELD_TYPE.YEAR {
+            } else if type == FIELD_TYPE.SHORT.to(uint) || type == FIELD_TYPE.YEAR.to(uint) {
                 let v = r.read_u16_le().to(int)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.LONG || type == FIELD_TYPE.INT24 {
+            } else if type == FIELD_TYPE.LONG.to(uint) || type == FIELD_TYPE.INT24.to(uint) {
                 let v = r.read_u32_le().to(int)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.LONGLONG {
+            } else if type == FIELD_TYPE.LONGLONG.to(uint) {
                 let v = r.read_u64_le().to(int)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.FLOAT {
+            } else if type == FIELD_TYPE.FLOAT.to(uint) {
                 let v : float = f32_from_bits(r.read_u32_le()).to(float)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.DOUBLE {
+            } else if type == FIELD_TYPE.DOUBLE.to(uint) {
                 let v : float = f64_from_bits(r.read_u64_le()).to(float)
                 row.set(name, v)
-            } else if type == FIELD_TYPE.STRING || type == FIELD_TYPE.VARCHAR || type == FIELD_TYPE.VAR_STRING || type == FIELD_TYPE.ENUM || type == FIELD_TYPE.SET || type == FIELD_TYPE.LONG_BLOB || type == FIELD_TYPE.MEDIUM_BLOB || type == FIELD_TYPE.BLOB || type == FIELD_TYPE.TINY_BLOB || type == FIELD_TYPE.GEOMETRY || type == FIELD_TYPE.BIT || type == FIELD_TYPE.DECIMAL || type == FIELD_TYPE.NEWDECIMAL || type == FIELD_TYPE.JSON {
+            } else if type == FIELD_TYPE.STRING.to(uint) || type == FIELD_TYPE.VARCHAR.to(uint) || type == FIELD_TYPE.VAR_STRING.to(uint) || type == FIELD_TYPE.ENUM.to(uint) || type == FIELD_TYPE.SET.to(uint) || type == FIELD_TYPE.LONG_BLOB.to(uint) || type == FIELD_TYPE.MEDIUM_BLOB.to(uint) || type == FIELD_TYPE.BLOB.to(uint) || type == FIELD_TYPE.TINY_BLOB.to(uint) || type == FIELD_TYPE.GEOMETRY.to(uint) || type == FIELD_TYPE.BIT.to(uint) || type == FIELD_TYPE.DECIMAL.to(uint) || type == FIELD_TYPE.NEWDECIMAL.to(uint) || type == FIELD_TYPE.JSON.to(uint) {
                 let strlen = r.read_int_enc()
                 let str = r.read_string(strlen)
                 row.set(name, str)
-            } else if type == FIELD_TYPE.DATE || type == FIELD_TYPE.DATETIME || type == FIELD_TYPE.TIMESTAMP {
+            } else if type == FIELD_TYPE.DATE.to(uint) || type == FIELD_TYPE.DATETIME.to(uint) || type == FIELD_TYPE.TIMESTAMP.to(uint) {
                 let len = r.read_byte()
                 if len != 0 && len != 4 && len != 7 && len != 11 : throw .error { message: "Mysql server responded with an invalid datetime value length: %len" }
                 let year : uint = 0
@@ -447,7 +447,7 @@ extend Connection {
                     usec = r.read_u32_le()
                 }
                 let date = "%{year.to(String).pad_left('0', 2)}-%{month.to(String).pad_left('0', 2)}-%{day.to(String).pad_left('0', 2)}"
-                if type == FIELD_TYPE.DATE {
+                if type == FIELD_TYPE.DATE.to(uint) {
                     row.set(name, date)
                 } else {
                     let time = "%{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
@@ -458,7 +458,7 @@ extend Connection {
                     }
                 }
 
-            } else if type == FIELD_TYPE.TIME {
+            } else if type == FIELD_TYPE.TIME.to(uint) {
                 let len = r.read_byte()
                 if len != 0 && len != 8 && len != 12 : throw .error { message: "Mysql server responded with an invalid datetime value length: %len" }
                 let negative = r.read_byte() == 1
@@ -515,10 +515,10 @@ extend Connection {
             // String data
             let pos = r.pos
 
-            if type == FIELD_TYPE.LONG || type == FIELD_TYPE.LONGLONG || type == FIELD_TYPE.TINY || type == FIELD_TYPE.INT24 || type == FIELD_TYPE.DECIMAL || type == FIELD_TYPE.SHORT {
+            if type == FIELD_TYPE.LONG.to(uint) || type == FIELD_TYPE.LONGLONG.to(uint) || type == FIELD_TYPE.TINY.to(uint) || type == FIELD_TYPE.INT24.to(uint) || type == FIELD_TYPE.DECIMAL.to(uint) || type == FIELD_TYPE.SHORT.to(uint) {
                 let v = r.read_int()
                 row.set(name, v)
-            } else if type == FIELD_TYPE.FLOAT || type == FIELD_TYPE.DOUBLE {
+            } else if type == FIELD_TYPE.FLOAT.to(uint) || type == FIELD_TYPE.DOUBLE.to(uint) {
                 let v = r.read_float()
                 row.set(name, v)
             } else {

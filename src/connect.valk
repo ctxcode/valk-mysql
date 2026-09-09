@@ -42,7 +42,7 @@ use valk.time
     packetbuf: ByteBuffer (.new())
     sender: ByteBuffer (.new())
     querybuf: ByteBuffer (.new()) // Reused when rewriting named parameters
-    recv_scratch: String (String.alloc(1024)) // Reused socket read buffer
+    recv_scratch: &mut [u8] ([u8]{ 0 x 1024 }) // Reused socket read buffer
     //
     seqid: u8 (0)
     // Connection info
@@ -157,7 +157,7 @@ use valk.time
     }
 
     fn recv_into_buffer() uint !Error {
-        let data = this.recv_scratch.to_slice()
+        let data = this.recv_scratch
         let count = this.con.read(data) ! throw .error { message: "Failed to read bytes from socket" }
         if count == 0 : throw .error { message: "MySQL server closed the connection" }
         this.data_in.write(data.view(0, count))

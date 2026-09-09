@@ -30,7 +30,7 @@ extend ByteBuffer {
 }
 
 // Debug helper: prints bytes as "0x..,0x.." like ptr.print_bytes, without raw pointers
-fn print_bytes(data: Slice[u8]) {
+fn print_bytes(data: &[u8]) {
     let len = data.length
     let i : uint = 0
     while i < len {

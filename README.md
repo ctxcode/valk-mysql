@@ -3,7 +3,7 @@
 
 A package to query mysql databases. The package is purely written in Valk and has no os-package dependencies.
 
-Requires Valk 0.6.0 or newer.
+Requires Valk 0.6.3 or newer.
 
 ## Install
 
