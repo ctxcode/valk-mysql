@@ -8,18 +8,21 @@ extend Connection {
         let method = this.auth_plugin
         if method == "mysql_native_password" {
             let hash = crypto.Sha1{}
+            let hash1: [u8 x 20] = @undefined
+            let hash2: [u8 x 20] = @undefined
+            let hash3: [u8 x 20] = @undefined
 
-            hash.add_string_data(this.password)
-            let hash1 = hash.final()
+            hash.update(this.password)
+            hash.finish(&hash1)
 
             hash.reset()
-            hash.add_hash_data(@ref(hash1))
-            let hash2 = hash.final()
+            hash.update(&hash1)
+            hash.finish(&hash2)
 
             hash.reset()
-            hash.add_string_data(this.salt)
-            hash.add_hash_data(@ref(hash2))
-            let hash3 = hash.final()
+            hash.update(this.salt)
+            hash.update(&hash2)
+            hash.finish(&hash3)
 
             let i : uint = 0
             while i < 20 {
@@ -30,15 +33,18 @@ extend Connection {
 
         } else if method == "caching_sha2_password" {
             let hash = crypto.Sha256{}
-            hash.add_string_data(this.password)
-            let hash1 = hash.final()
+            let hash1: [u8 x 32] = @undefined
+            let hash2: [u8 x 32] = @undefined
+            let hash3: [u8 x 32] = @undefined
+            hash.update(this.password)
+            hash.finish(&hash1)
             hash.reset()
-            hash.add_hash_data(@ref(hash1))
-            let hash2 = hash.final()
+            hash.update(&hash1)
+            hash.finish(&hash2)
             hash.reset()
-            hash.add_hash_data(@ref(hash2))
-            hash.add_string_data(this.salt)
-            let hash3 = hash.final()
+            hash.update(&hash2)
+            hash.update(this.salt)
+            hash.finish(&hash3)
             let i : uint = 0
             while i < 32 {
                 to.write_byte(hash1[i] ^ hash3[i])

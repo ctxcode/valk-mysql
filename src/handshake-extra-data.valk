@@ -90,5 +90,5 @@ fn rsa_public_encrypt(key: String, in: ByteBuffer, out: ByteBuffer) !Error {
     out.reserve(out_len)
     let res = RSA_public_encrypt(in.length.to(i32), in.data, out.data.@offset(out.length), rsa, RSA_PKCS1_OAEP_PADDING)
     if res <= 0 : throw .error { message: "Failed to encrypt password using the mysql RSA public key" }
-    out.advance(res.to(uint))
+    out.skip(res.to(uint))
 }

@@ -4,7 +4,7 @@ use valk.time
 
 + fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error {
 
-    let sock = net.Socket.client(net.SocketType.tcp, host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
+    let sock = net.tcp_client(host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
     let col_types = Array[uint]{}
     let col_names = Array[String]{}
@@ -28,7 +28,7 @@ use valk.time
 }
 
 + class Connection {
-    con: net.Connection
+    con: net.TcpConnection
     //
     host: String
     username: String
@@ -42,7 +42,7 @@ use valk.time
     packetbuf: ByteBuffer (.new())
     sender: ByteBuffer (.new())
     querybuf: ByteBuffer (.new()) // Reused when rewriting named parameters
-    recv_scratch: &mut [u8] ([u8]{ 0 x 1024 }) // Reused socket read buffer
+    recv_scratch: mut &[u8] ([u8]{ 0 x 1024 }) // Reused socket read buffer
     //
     seqid: u8 (0)
     // Connection info

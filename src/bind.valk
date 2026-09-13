@@ -52,7 +52,7 @@ extend Connection {
                         break
                     }
                     let len = end - start + 1
-                    let name = query.part(start, len)
+                    let name = query.range(start, len)
                     let bindv = this.named_binds.get(name) ! throw .error { message: "Cannot find named binding: '" + name + "'" }
                     if isset(bindv) {
                         if bindv.type == TYPE.array {
