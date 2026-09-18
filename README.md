@@ -5,6 +5,8 @@ A package to query mysql databases. The package is purely written in Valk and ha
 
 Requires Valk 0.7.3 or newer.
 
+API documentation: [docs/api.md](docs/api.md), [docs/api-full.md](docs/api-full.md).
+
 ## Install
 
 ```
