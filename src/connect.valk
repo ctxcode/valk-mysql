@@ -104,16 +104,16 @@ use valk.time
         this.stop_query()
 
         // Error code
-        r.skip(2)
+        let code = r.read_u16_le().to(uint)
 
+        let sqlstate = ""
         if this.caps & CAP.CLIENT_PROTOCOL_41 > 0 {
             // sql_state_marker
             r.read_byte()
-            // sql_state
-            r.skip(5)
+            sqlstate = r.read_string(5)
         }
 
-        throw .error { message: r.read_remaining_string() }
+        throw .error { message: r.read_remaining_string(), error_code: code, sqlstate: sqlstate }
     }
 
     fn recv() !Error {

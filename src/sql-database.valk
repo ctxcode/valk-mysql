@@ -1,0 +1,159 @@
+use sql
+
+/// Returns the connection as a `sql.Db`, the database type of the `valk-sql` package.
+///
+/// Everything `valk-sql` offers — the query builder, migrations, pools, rows read into your own
+/// classes — then works on this database, and the same code runs on SQLite or Postgres by
+/// opening it with their driver instead.
+///
+/// The connection itself stays usable: this is a view of it, not a replacement.
+///
+/// ```valk
+/// use sql
+/// use mysql
+///
+/// let db = mysql.database(mysql.connect("127.0.0.1", "user", "password", "app", 3306) ! panic("%{E.message}"))
+/// db.exec("INSERT INTO users (name) VALUES (?)", .{ sql.Value.of("Ada") }) ! panic("%{E.message}")
+/// ```
++ fn database(con: Connection) sql.Db {
+    return sql.Db.new(SqlDriver { con: con })
+}
+
+// The connection behind a `sql.Db`
+class SqlDriver is sql.Driver {
+    con: Connection
+
+    + get dialect: sql.Dialect {
+        return sql.Dialect.mysql
+    }
+
+    + fn exec(statement: String, args: Array[sql.Value]) uint !sql.Error {
+        this.run_statement(statement, args) !>
+        let con = this.con
+        con.stop_query()
+        return con.affected_rows
+    }
+
+    + fn query(statement: String, args: Array[sql.Value]) sql.Rows !sql.Error {
+        this.run_statement(statement, args) !>
+        return SqlRows { con: this.con }
+    }
+
+    fn run_statement(statement: String, args: Array[sql.Value]) !sql.Error {
+        let con = this.con
+        con.clear_binds()
+        each args as arg {
+            con.bindv(to_driver_value(arg))
+        }
+        translate(statement, fn() !Error {
+            con.query(statement) !>
+        }) !>
+    }
+
+    + fn last_insert_id() int {
+        return this.con.last_inserted_id.to(int)
+    }
+
+    + fn begin(immediate: bool) !sql.Error {
+        this.exec("START TRANSACTION", .{}) !>
+    }
+    + fn commit() !sql.Error {
+        this.exec("COMMIT", .{}) !>
+    }
+    + fn rollback() !sql.Error {
+        this.exec("ROLLBACK", .{}) !>
+    }
+
+    + fn ping() bool {
+        if this.con.closed : return false
+        let con = this.con
+        con.query("SELECT 1") ! return false
+        let row: Map[Value] = .{}
+        let found = con.fetch_row(row) ! return false
+        con.stop_query()
+        return found
+    }
+
+    + fn close() {
+        this.con.close()
+    }
+}
+
+// The rows of one query
+class SqlRows is sql.Rows {
+    con: Connection
+    driver_row: Map[Value] (.{})
+
+    + fn next(row: Map[sql.Value]) bool !sql.Error {
+        let con = this.con
+        let driver_row = this.driver_row
+        let found = translate_value[bool]("", fn() bool !Error {
+            return con.fetch_row(driver_row) !>
+        }) !>
+        if !found : return false
+        row.clear()
+        each driver_row as value, column {
+            row.set(column, to_sql_value(value))
+        }
+        return true
+    }
+
+    + fn close() {
+        this.con.stop_query()
+    }
+}
+
+// MySQL has no boolean type: `BOOLEAN` is `TINYINT(1)`, so a bool travels as 1 or 0
+fn to_driver_value(value: sql.Value) Value {
+    let type = value.type
+    if type == sql.TYPE.null : return Value { type: TYPE.null }
+    if type == sql.TYPE.bool : return Value { type: TYPE.int, int_value: value.to_int() }
+    if type == sql.TYPE.int : return Value { type: TYPE.int, int_value: value.int_value }
+    if type == sql.TYPE.float : return Value { type: TYPE.float, float_value: value.float_value }
+    return Value { type: TYPE.string, string_value: value.text }
+}
+
+fn to_sql_value(value: Value) sql.Value {
+    let type = value.type
+    if type == TYPE.null : return sql.Value.null()
+    if type == TYPE.int : return sql.Value.of_int(value.to_int())
+    if type == TYPE.float : return sql.Value.of_float(value.to_float())
+    return sql.Value.of(value.to_string())
+}
+
+// An error type is not a value in valk, so a caught error cannot be handed to a function. Every
+// driver call therefore runs through here, which is the one place that maps the errors of this
+// package onto the errors of `sql`.
+fn translate_value[T](statement: String, work: fn()(T !Error)) T !sql.Error {
+    return work() ! {
+        if error_is(E.code, connect) || error_is(E.code, handshake) {
+            throw .connect { message: E.message, driver_code: E.error_code.to(String), sql: statement }
+        }
+        throw_for_state(E.sqlstate, E.error_code, E.message, statement)
+    }
+}
+
+fn translate(statement: String, work: fn()(!Error)) !sql.Error {
+    work() ! {
+        if error_is(E.code, connect) || error_is(E.code, handshake) {
+            throw .connect { message: E.message, driver_code: E.error_code.to(String), sql: statement }
+        }
+        throw_for_state(E.sqlstate, E.error_code, E.message, statement)
+    }
+}
+
+// The server error number says what kind of answer it is; the SQLSTATE groups them
+fn throw_for_state(sqlstate: String, code: uint, message: String, statement: String) !sql.Error $throw {
+    let driver_code = code.to(String)
+    // 1205 lock wait timeout, 1213 deadlock
+    if code == 1205 || code == 1213 : throw .busy { message: message, driver_code: driver_code, sql: statement }
+    // 1290 running with --read-only, 1836 read-only mode
+    if code == 1290 || code == 1836 : throw .readonly { message: message, driver_code: driver_code, sql: statement }
+    // 2002/2003/2006/2013 are the connection numbers
+    if code == 2002 || code == 2003 || code == 2006 || code == 2013 : throw .connect { message: message, driver_code: driver_code, sql: statement }
+    let kind = sqlstate.range(0, 2)
+    if kind == "23" : throw .constraint { message: message, driver_code: driver_code, sql: statement }
+    if kind == "42" || kind == "21" || kind == "22" : throw .syntax { message: message, driver_code: driver_code, sql: statement }
+    if kind == "08" : throw .connect { message: message, driver_code: driver_code, sql: statement }
+    throw .error { message: message, driver_code: driver_code, sql: statement }
+}

@@ -10,4 +10,4 @@ test-multi:
 example:
 	$(vc) build ./example --run
 
-.PHONY: test test-basic test-multi example
+.PHONY: deps test test-basic test-multi example

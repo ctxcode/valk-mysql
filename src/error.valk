@@ -1,2 +1,13 @@
 
-error Error (connect, handshake, unsupported, error) payload { message: String }
+/// Thrown by every operation of this package.
+///
+/// - `connect`: the TCP connection failed.
+/// - `handshake`: logging in failed.
+/// - `unsupported`: the server asked for something this package does not implement.
+/// - `error`: the server reported an error. `error_code` holds its number, such as 1062 for a
+///   duplicate key, and `sqlstate` the five character state, such as `23000`.
+error Error (connect, handshake, unsupported, error) payload {
+    message: String
+    error_code: uint (0)
+    sqlstate: String ("")
+}

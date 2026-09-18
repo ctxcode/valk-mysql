@@ -42,6 +42,25 @@ while db.fetch_row(user) ! panic("Error: %{E.message}") {
 let users = db.fetch_all() ! { assert(false) return }
 ```
 
+## With valk-sql
+
+`mysql.database(con)` turns a connection into a `sql.Db` of the
+[valk-sql](https://github.com/ctxcode/valk-sql) package, which gives every database the same
+API: a query builder, migrations, connection pools, and rows read into your own classes. The
+same program then runs on another database by opening it with that driver instead.
+
+```rust
+use sql
+use mysql
+
+let db = mysql.database(mysql.connect("127.0.0.1", "user", "password", "app", 3306) ! panic("%{E.message}"))
+db.exec("INSERT INTO users (name, age) VALUES (?, ?)", .{ sql.Value.of("Ada"), sql.Value.of_int(36) }) ! panic("%{E.message}")
+let rows = db.all("SELECT * FROM users WHERE age > ?", .{ sql.Value.of_int(18) }) ! panic("%{E.message}")
+```
+
+The connection itself keeps working as before: the wrapper is a view of it, and the driver's own
+API stays there for the paths where every allocation counts.
+
 ## Development
 
 `make test` runs the integration tests against MySQL/MariaDB at `127.0.0.1:3306`
