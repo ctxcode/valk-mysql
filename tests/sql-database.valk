@@ -171,3 +171,46 @@ test "Conditions that mix AND and OR on MySQL" {
 
     db.exec("DROP TABLE sql_mixed") ! { assert(false) return }
 }
+
+test "Chunking and rows taken over, on MySQL" {
+    let db = sql_db() ! { assert(false) return }
+    defer db.close()
+    db.exec("DROP TABLE IF EXISTS sql_chunks") ! { assert(false) return }
+    db.exec("CREATE TABLE sql_chunks (id int NOT NULL AUTO_INCREMENT, name varchar(50), checked tinyint(1) DEFAULT 0, PRIMARY KEY (id))") ! {
+        println(E.message)
+        assert(false)
+        return
+    }
+    let i: uint = 0
+    while i++ < 120 : db.exec("INSERT INTO sql_chunks (name) VALUES (?)", .{ sql.Value.of("row " + i) }) ! { assert(false) return }
+
+    let pages: Array[uint] = .{}
+    let seen = db.select().from("sql_chunks").order_by("id").chunk(50, fn(rows: Array[Map[sql.Value]]) bool !sql.Error {
+        pages.append(rows.length)
+        return true
+    }) ! { println(E.message) assert(false) return }
+    assert(seen == 120)
+    assert(pages.length == 3)
+
+    let updated = db.select().from("sql_chunks").chunk_by_id("id", 40, fn(rows: Array[Map[sql.Value]]) bool !sql.Error {
+        each rows as row {
+            db.exec("UPDATE sql_chunks SET checked = 1 WHERE id = ?", .{ row.get("id") !? sql.Value.null() }) !>
+        }
+        return true
+    }) ! { println(E.message) assert(false) return }
+    assert(updated == 120)
+    assert((db.value("SELECT count(*) FROM sql_chunks WHERE checked = 1") ! { assert(false) return }).to_int() == 120)
+
+    let rows = db.query("SELECT id FROM sql_chunks ORDER BY id") ! { assert(false) return }
+    let row: Map[sql.Value] = .{}
+    rows.next(row) ! { assert(false) return }
+    db.exec("UPDATE sql_chunks SET checked = 0 WHERE id = 1") ! { assert(false) return }
+    rows.next(row) ! {
+        assert(error_is(E.code, error))
+        assert(E.message.contains("another statement ran"))
+        rows.close()
+        db.exec("DROP TABLE sql_chunks") ! { assert(false) return }
+        return
+    }
+    assert(false)
+}

@@ -19,6 +19,9 @@ extend Connection {
     statement_id: uint (0)
     param_count: uint (0)
     ~ affected_rows: uint (0)
+    /// Counts the statements that have run, so that the rows of a query can tell whether
+    /// another statement took the connection from under them.
+    ~+ query_serial: uint (0)
     ~ last_inserted_id: uint (0)
     fetching: bool (false)
     statements: Map[Statement] (.{})
@@ -30,6 +33,7 @@ extend Connection {
         if this.in_progress : this.stop_query()
         //
         this.in_progress = true
+        this.query_serial++
 
         if isset(binds) {
             each binds as value, name {
