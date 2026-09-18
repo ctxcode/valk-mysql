@@ -63,6 +63,9 @@ API stays there for the paths where every allocation counts.
 
 ## Development
 
+`make deps` fetches the `valk-sql` package the `database()` adapter needs; the tests build
+against it from `vendor/`.
+
 `make test` runs the integration tests against MySQL/MariaDB at `127.0.0.1:3306`
 with user `test` and password `root`. The tests create and use `valk_mysql_tests`.
 `make example` builds and runs the local example. Override the compiler with
