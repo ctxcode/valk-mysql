@@ -1,6 +1,12 @@
 
 vc ?= valk
 
+deps:
+	vman install
+server:
+	./tests/server.sh up
+server-down:
+	./tests/server.sh down
 test:
 	$(vc) build ./tests --test --run
 test-basic:
@@ -10,4 +16,4 @@ test-multi:
 example:
 	$(vc) build ./example --run
 
-.PHONY: deps test test-basic test-multi example
+.PHONY: server server-down deps test test-basic test-multi example

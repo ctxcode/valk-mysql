@@ -63,6 +63,9 @@ API stays there for the paths where every allocation counts.
 
 ## Development
 
+`make server` starts a MySQL in docker on port 3306 with the user the tests use, and
+`make server-down` removes it again; a machine that already runs MySQL there needs neither.
+
 `make deps` fetches the `valk-sql` package the `database()` adapter needs; the tests build
 against it from `vendor/`.
 
