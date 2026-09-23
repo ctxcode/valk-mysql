@@ -3,7 +3,7 @@ extern fn RSA_public_encrypt(len: i32, in: ptr, out: ptr, rsa_public_key: cstrin
 extern fn RSA_size(rsa: ptr) i32;
 extern fn BIO_new_mem_buf(buf: ptr, len: i32) ?ptr;
 extern fn PEM_read_bio_RSA_PUBKEY(bp: ptr, x: ?ptr, cb: ?ptr, u: ?ptr) ?ptr;
-extern fn BIO_free(bp: ptr);
+extern fn BIO_free(bp: ptr) i32;
 
 value RSA_PKCS1_OAEP_PADDING (4)
 
