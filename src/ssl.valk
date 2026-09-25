@@ -1,0 +1,29 @@
+/// How a connection uses TLS.
++ enum SslMode {
+    /// Never use TLS.
+    disable
+    /// Use TLS when the server offers it, without checking its certificate (the default). MySQL
+    /// servers make a self-signed certificate of their own, which nothing could check.
+    prefer
+    /// Fail when the server does not offer TLS. The certificate is not checked.
+    require
+    /// Require TLS and check the server certificate against the system CA store (plus
+    /// `ca_file`) and the host name.
+    verify_full
+}
+
+/// TLS settings for `connect_with`.
++ class SslOptions {
+    /// How TLS is used.
+    + mode: SslMode (SslMode.prefer)
+    /// A PEM file with CA certificates to trust besides the system store, for a server
+    /// certificate from a private CA. Only used in `verify_full` mode.
+    + ca_file: ?String (null)
+    /// A PEM file with the client certificate, optionally followed by the intermediate
+    /// certificates, for an account that requires one (`REQUIRE X509`).
+    + certificate_file: ?String (null)
+    /// The PEM private key of `certificate_file`. Null reads it from `certificate_file`.
+    + private_key_file: ?String (null)
+    /// The password of an encrypted private key.
+    + key_password: String ("")
+}

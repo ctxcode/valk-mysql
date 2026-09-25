@@ -24,7 +24,7 @@ extend Connection {
                 return true
             } else if byte == 0x04 {
                 // Fast auth failed, full auth required
-                if this.ssl_enabled {
+                if this.ssl_active {
                     // Send plain password + 0x00 byte
                     let s = this.sender
                     s.write(this.password)

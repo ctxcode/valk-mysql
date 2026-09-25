@@ -3,7 +3,7 @@
 
 A package to query mysql databases. The package is purely written in Valk and has no os-package dependencies.
 
-Requires Valk 0.7.3 or newer.
+Requires Valk 0.7.5 or newer.
 
 API documentation: [docs/api.md](docs/api.md), [docs/api-full.md](docs/api-full.md).
 
@@ -43,6 +43,23 @@ while db.fetch_row(user) ! panic("Error: %{E.message}") {
 // Fetch all
 let users = db.fetch_all() ! { assert(false) return }
 ```
+
+## TLS
+
+The connection uses TLS whenever the server offers it, without checking the server's
+certificate: a MySQL server makes a self-signed one of its own, which nothing could vouch for.
+To check it, give the CA that signed the server certificate:
+
+```rust
+let db = mysql.connect_with("db.example.com", "user", "password", "app", 3306, mysql.SslOptions {
+    mode: mysql.SslMode.verify_full
+    ca_file: "/etc/mysql/ca.pem"
+}) ! panic("%{E.message}")
+```
+
+`SslMode.require` refuses a server without TLS, `SslMode.disable` never uses it, and
+`certificate_file` / `private_key_file` send a client certificate to an account that requires
+one. `db.ssl_enabled()` tells whether the connection runs over TLS.
 
 ## With valk-sql
 

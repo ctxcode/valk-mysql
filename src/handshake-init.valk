@@ -67,8 +67,13 @@ extend Connection {
         //////////////////////////////////////////////////
 
         // SSL
-        if caps & CAP.CLIENT_SSL > 0 {
-            this.enable_ssl()
+        let mode = this.ssl.mode
+        if mode != SslMode.disable {
+            if caps & CAP.CLIENT_SSL > 0 {
+                this.enable_ssl() !>
+            } else if mode == SslMode.require || mode == SslMode.verify_full {
+                throw .connect { message: "The server does not offer TLS" }
+            }
         }
     }
 }

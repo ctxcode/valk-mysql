@@ -1,0 +1,28 @@
+use mysql
+
+test "TLS modes" {
+    // A MySQL 8 server offers TLS with a certificate it made itself
+    let preferred = mysql.connect("127.0.0.1", "test", "root", null, 3306) ! { println(E.message) assert(false) return }
+    assert(preferred.ssl_enabled())
+    preferred.close()
+
+    let plain = mysql.connect("127.0.0.1", "test", "root", null, 3306, mysql.SslMode.disable) ! { println(E.message) assert(false) return }
+    assert(!plain.ssl_enabled())
+    plain.query("SELECT 1 + 1 AS two") ! { println(E.message) assert(false) return }
+    let rows = plain.fetch_all() ! { println(E.message) assert(false) return }
+    assert(rows.length == 1)
+    plain.close()
+
+    let required = mysql.connect("127.0.0.1", "test", "root", null, 3306, mysql.SslMode.require) ! { println(E.message) assert(false) return }
+    assert(required.ssl_enabled())
+    required.close()
+
+    // Nothing vouches for that certificate, so checking it fails
+    let refused = ""
+    mysql.connect("127.0.0.1", "test", "root", null, 3306, mysql.SslMode.verify_full) ! { refused = E.message }
+    assert(refused.starts_with("Failed to establish SSL connection"))
+
+    let missing = ""
+    mysql.connect_with("127.0.0.1", "test", "root", null, 3306, mysql.SslOptions { mode: mysql.SslMode.verify_full, ca_file: "/no/such/ca.pem" }) ! { missing = E.message }
+    assert(missing == "Cannot read the CA file '/no/such/ca.pem'")
+}

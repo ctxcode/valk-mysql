@@ -2,8 +2,15 @@
 use valk.net
 use valk.time
 
-+ fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error {
+/// Connects and logs in. TLS is used when the server offers it, without checking the
+/// certificate; `connect_with` takes other `SslOptions`.
++ fn connect(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslMode (SslMode.prefer)) Connection !Error {
+    return connect_with(host, user, password, db, port, SslOptions { mode: ssl }) !>
+}
 
+/// Connects and logs in with the TLS settings in `ssl`, such as a CA file to check the server
+/// certificate against, or a client certificate.
++ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslOptions) Connection !Error {
     let sock = net.tcp_client(host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
 
     let col_types = Array[uint]{}
@@ -14,6 +21,7 @@ use valk.time
         username: user
         password: password
         db: db
+        ssl: ssl
         reader: ByteReader.new("")
         //
         default_column_types: col_types
@@ -34,6 +42,7 @@ use valk.time
     username: String
     password: String
     db: ?String
+    ssl: SslOptions
     // Data in
     data_in: ByteBuffer (.new())
     packet_end: uint (0) // End of the packet `reader` currently views inside data_in (compacted on next recv)
@@ -54,7 +63,8 @@ use valk.time
     salt: String ("")
     rsa_public_key: ?String
     //
-    ssl_enabled: bool (false)
+    // Whether the connection runs over TLS
+    ssl_active: bool (false)
     + debug: bool (false)
     + debug_bytes: bool (false)
     ~ closed: bool (false)
@@ -193,8 +203,13 @@ use valk.time
         let caps : u64 = CAP.CLIENT_MYSQL | CAP.CLIENT_PROTOCOL_41 | CAP.CLIENT_PLUGIN_AUTH | CAP.CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA | CAP.CLIENT_DEPRECATE_EOF | CAP.CLIENT_MULTI_STATEMENTS
         this.caps = caps
         if isset(this.db) : caps |= CAP.CLIENT_CONNECT_WITH_DB
-        if isset(this.ssl_enabled) : caps |= CAP.CLIENT_SSL
+        if this.ssl_active : caps |= CAP.CLIENT_SSL
         return caps
+    }
+
+    /// Returns whether the connection runs over TLS.
+    + fn ssl_enabled() bool {
+        return this.ssl_active
     }
 
     + fn close() {

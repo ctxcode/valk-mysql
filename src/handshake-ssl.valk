@@ -26,12 +26,22 @@ extend Connection {
         this.send() !>
         this.check_error() !>
 
+        let options = this.ssl
         let ssl = net.Ssl.new()
-        ssl.set_verify(false)
-
+        // The host name is checked along with the chain: ssl_connect names the host connected to
+        ssl.set_verify(options.mode == SslMode.verify_full)
+        let ca_file = options.ca_file
+        if isset(ca_file) : ssl.set_ca_cert(ca_file) ! throw .connect { message: "Cannot read the CA file '" + ca_file + "'" }
+        let certificate = options.certificate_file
+        if isset(certificate) {
+            let key = options.private_key_file ?? certificate
+            ssl.set_certificate(certificate, key, options.key_password) ! {
+                throw .connect { message: "Cannot use the client certificate '" + certificate + "' with the key '" + key + "'" }
+            }
+        }
         this.con.ssl_connect(ssl) ! {
             throw .connect { message: "Failed to establish SSL connection: " + ssl.get_error_message() }
         }
-        this.ssl_enabled = true
+        this.ssl_active = true
     }
 }
