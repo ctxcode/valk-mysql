@@ -17,13 +17,18 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
 ## Enums for 'main'
 
 ```js
+// How a connection uses TLS.
++ enum SslMode { disable, prefer, require, verify_full }
 + enum TYPE { null, int, float, string, array }
 ```
 
 ## Functions for 'main'
 
 ```js
-+ fn connect(host: String, user: String, password: String, db: ?String, port: u32) Connection !Error
+// Connects and logs in. TLS is used when the server offers it, without checking the certificate; `connect_with` takes other `SslOptions`.
++ fn connect(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslMode (SslMode.prefer)) Connection !Error
+// Connects and logs in with the TLS settings in `ssl`, such as a CA file to check the server certificate against, or a client certificate.
++ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslOptions) Connection !Error
 + fn convert(ndata: $T) Value
 // Returns the connection as a `sql.Db`, the database type of the `valk-sql` package.
 + fn database(con: Connection) Db
@@ -50,6 +55,24 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
     + fn fetch_row(row: Map[Value]) bool !Error
     + fn query(q: String, binds: ?Map[?Value] (null)) void !Error
     + fn replace_named_params(query: String) String !Error
+    // Returns whether the connection runs over TLS.
+    + fn ssl_enabled() bool
+}
+```
+
+```js
+// TLS settings for `connect_with`.
++ class SslOptions {
+    // A PEM file with CA certificates to trust besides the system store, for a server certificate from a private CA. Only used in `verify_full` mode.
+    + ca_file: ?String
+    // A PEM file with the client certificate, optionally followed by the intermediate certificates, for an account that requires one (`REQUIRE X509`).
+    + certificate_file: ?String
+    // The password of an encrypted private key.
+    + key_password: String
+    // How TLS is used.
+    + mode: SslMode
+    // The PEM private key of `certificate_file`. Null reads it from `certificate_file`.
+    + private_key_file: ?String
 }
 ```
 
