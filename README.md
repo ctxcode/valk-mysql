@@ -41,7 +41,7 @@ while db.fetch_row(user) ! panic("Error: %{E.message}") {
 }
 
 // Fetch all
-let users = db.fetch_all() ! { assert(false) return }
+let users = db.fetch_all() ! panic("Error: %{E.message}")
 ```
 
 ## TLS
@@ -77,8 +77,7 @@ db.exec("INSERT INTO users (name, age) VALUES (:name, :age)", .{ "name" => "Ada"
 let rows = db.all("SELECT * FROM users WHERE age > :age", .{ "age" => 18 }) ! panic("%{E.message}")
 ```
 
-The connection itself keeps working as before: the wrapper is a view of it, and the driver's own
-API stays there for the paths where every allocation counts.
+The connection's own API stays available next to it.
 
 ## Development
 
