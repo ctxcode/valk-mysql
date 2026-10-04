@@ -53,6 +53,8 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
     + fn close() void
     + fn fetch_all() Array[Map[Value]] !Error
     + fn fetch_row(row: Map[Value]) bool !Error
+    // Prepares a statement on the server, to run many times with other values each time.
+    + fn prepare(sql: String) Statement !Error
     + fn query(q: String, binds: ?Map[?Value] (null)) void !Error
     + fn replace_named_params(query: String) String !Error
     // Returns whether the connection runs over TLS.
@@ -77,7 +79,25 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
 ```
 
 ```js
+// A statement prepared once on the server and run as often as needed, made by `Connection.prepare`.
++ class Statement {
+    ~ closed: bool
+    // The SQL the statement was prepared from.
+    ~+ sql: String
+
+    // Releases the statement on the server. Running it afterwards throws.
+    + fn close() void
+    // Runs the statement with `values` bound to its `:name` placeholders. Rows, if any, are read with `fetch_row` or `fetch_all` of the connection.
+    + fn query(values: ?Map[?Value] (null)) void !Error
+    // Runs the statement and returns how many rows it changed. `last_inserted_id` of the connection holds the id an insert wrote.
+    + fn run(values: ?Map[?Value] (null)) uint !Error
+}
+```
+
+```js
 + class Value {
+    // Returns whether the value is NULL.
+    + fn is_null() bool
     + static fn null() Value
     + fn to_bool() bool
     + fn to_bool_or_null() ?bool

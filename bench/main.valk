@@ -1,0 +1,58 @@
+// Plain queries against a prepared statement, on one connection to 127.0.0.1:3306
+
+use mysql
+use valk.time
+
+fn main() {
+    let con = mysql.connect("127.0.0.1", "test", "root", null, 3306) !!
+    con.query("CREATE DATABASE IF NOT EXISTS valk_mysql_tests") !!
+    con.query("USE valk_mysql_tests") !!
+    con.query("DROP TABLE IF EXISTS bench") !!
+    con.query("CREATE TABLE bench (id int NOT NULL AUTO_INCREMENT PRIMARY KEY, name varchar(50), n int)") !!
+    let n: uint = 20000
+    let round = 0
+    while round++ < 3 {
+        let start = time.mono_us()
+        con.query("START TRANSACTION") !!
+        let i: uint = 0
+        while i++ < n : con.query("INSERT INTO bench (name, n) VALUES (:name, :n)", .{ "name" => "row " + i, "n" => i }) !!
+        con.query("COMMIT") !!
+        report("insert, query", n, start)
+
+        let insert = con.prepare("INSERT INTO bench (name, n) VALUES (:name, :n)") !!
+        start = time.mono_us()
+        con.query("START TRANSACTION") !!
+        i = 0
+        while i++ < n : insert.run(.{ "name" => "row " + i, "n" => i }) !!
+        con.query("COMMIT") !!
+        report("insert, prepared", n, start)
+        insert.close()
+
+        let row: Map[mysql.Value] = .{}
+        let sum: int = 0
+        start = time.mono_us()
+        i = 0
+        while i++ < n {
+            con.query("SELECT id, name, n FROM bench WHERE id = :id", .{ "id" => i }) !!
+            while con.fetch_row(row) !! : sum += (row["n"] ?? mysql.Value.null()).to_int()
+        }
+        report("select by id, query", n, start)
+
+        let find = con.prepare("SELECT id, name, n FROM bench WHERE id = :id") !!
+        start = time.mono_us()
+        i = 0
+        while i++ < n {
+            find.query(.{ "id" => i }) !!
+            while con.fetch_row(row) !! : sum += (row["n"] ?? mysql.Value.null()).to_int()
+        }
+        report("select by id, prepared", n, start)
+        find.close()
+        if sum == 0 : println("no rows")
+    }
+    con.query("DROP TABLE bench") !!
+}
+
+fn report(label: String, ops: uint, start: uint) {
+    let us = time.mono_us() - start
+    println(label.pad_right(' ', 26) + (ops * 1000000 / us) + " ops/s")
+}

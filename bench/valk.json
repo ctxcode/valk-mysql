@@ -1,0 +1,11 @@
+{
+    "src": ".",
+    "dependencies": {
+        "mysql": {
+            "src": "../"
+        },
+        "sql": {
+            "src": "../vendor/github-ctxcode-valk-sql/0.3.0"
+        }
+    }
+}

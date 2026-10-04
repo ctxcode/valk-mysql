@@ -1,7 +1,10 @@
 
 use valk.time
 
-class Statement {
+// Added to a column type for an unsigned integer column
+value UNSIGNED_TYPE (0x100)
+
+class CachedStatement {
     id: uint
     last_used: uint
     column_count: uint
@@ -24,7 +27,7 @@ extend Connection {
     ~+ query_serial: uint (0)
     ~ last_inserted_id: uint (0)
     fetching: bool (false)
-    statements: Map[Statement] (.{})
+    statements: Map[CachedStatement] (.{})
     is_statement: bool (false)
     in_progress : bool (false)
     columns_known : bool (false)
@@ -119,7 +122,8 @@ extend Connection {
         }
     }
 
-    fn read_column() (String, u8) !Error {
+    // The type of a column, with UNSIGNED_TYPE added for an unsigned integer column
+    fn read_column() (String, uint) !Error {
         let r = this.reader
         this.recv() ! throw .error
         this.check_error() ! throw .error
@@ -149,9 +153,10 @@ extend Connection {
         // column_length
         r.skip(4)
         // type
-        let type = r.read_byte()
+        let type: uint = r.read_byte()
         // flags
-        r.skip(2)
+        let flags = r.read_u16_le()
+        if flags & 32 > 0 : type |= UNSIGNED_TYPE
         // decimals
         r.skip(1)
         // reserved
@@ -168,7 +173,7 @@ extend Connection {
         this.send() !>
     }
 
-    fn prepare(q: String) !Error {
+    fn prepare_cached(q: String) !Error {
 
         this.statements.get(q) -> stmt {
             this.statement_id = stmt.id
@@ -180,6 +185,22 @@ extend Connection {
             return
         }
 
+        this.prepare_on_server(q) !>
+
+        // Store statement
+        let stmt = CachedStatement {
+            id: this.statement_id
+            column_count: this.column_count
+            param_count: this.param_count
+            column_names: this.column_names.clone()
+            column_types: this.column_types.clone()
+            last_used: time.mono_us()
+        }
+        this.statements.set(q, stmt)
+    }
+
+    // COM_STMT_PREPARE; sets statement_id, param_count and the columns
+    fn prepare_on_server(q: String) !Error {
         let s = this.sender
         // COM_STMT_PREPARE
         this.seqid = 0
@@ -209,32 +230,23 @@ extend Connection {
         }
 
         // Meta data packets
-        this.read_prepare_param_data()
-        this.read_column_data()
-
-        // Store statement
-        let stmt = Statement {
-            id: this.statement_id
-            column_count: this.column_count
-            param_count: this.param_count
-            column_names: this.column_names.clone()
-            column_types: this.column_types.clone()
-            last_used: time.mono_us()
-        }
-        this.statements.set(q, stmt)
+        this.read_prepare_param_data() !>
+        this.read_column_data() !>
     }
 
     fn send_prep_query(q: String) !Error {
-        // Prepare
-        this.prepare(q) !>
-        // Execute
+        this.prepare_cached(q) !>
+        this.send_execute(this.statement_id, this.param_count) !>
+    }
+
+    // COM_STMT_EXECUTE of a prepared statement with the values in `final_binds`
+    fn send_execute(statement_id: uint, param_count: uint) !Error {
         let s = this.sender
-        let param_count = this.param_count
         // COM_STMT_EXECUTE
         this.seqid = 0
         s.write_byte(0x17)
         // Statement_id
-        s.write_u32_le(this.statement_id.to(u32))
+        s.write_u32_le(statement_id.to(u32))
         // Flags
         s.write_byte(CURSOR.NONE.to(u8))
         // iteration_count : always 1
@@ -393,8 +405,10 @@ extend Connection {
         while i < column_count {
             let byte_pos = (i + 2) / 8
             let bit_pos = ((i + 2) % 8).to(u8)
-            let type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let full_type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
             let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+            let unsigned = (full_type & UNSIGNED_TYPE) > 0
+            let type = full_type & 0xFF
             i++
             // Check if is null
             let byte = null_data.get(null_start + byte_pos) !? 0
@@ -406,12 +420,16 @@ extend Connection {
             //
             if type == FIELD_TYPE.TINY.to(uint) {
                 let v = r.read_byte().to(int)
+                if !unsigned && v >= 0x80 : v -= 0x100
                 row.set(name, v)
             } else if type == FIELD_TYPE.SHORT.to(uint) || type == FIELD_TYPE.YEAR.to(uint) {
                 let v = r.read_u16_le().to(int)
+                if !unsigned && v >= 0x8000 : v -= 0x10000
                 row.set(name, v)
             } else if type == FIELD_TYPE.LONG.to(uint) || type == FIELD_TYPE.INT24.to(uint) {
+                // INT24 is sent in four bytes, sign extended
                 let v = r.read_u32_le().to(int)
+                if !unsigned && v >= 0x80000000 : v -= 0x100000000
                 row.set(name, v)
             } else if type == FIELD_TYPE.LONGLONG.to(uint) {
                 let v = r.read_u64_le().to(int)
@@ -506,7 +524,7 @@ extend Connection {
         let i : uint = 0
         while i < column_count {
             //
-            let type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
+            let type = (column_types.get(i) ! throw .error { message: "Bug: Missing column type" }) & 0xFF
             let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
             i++
             //

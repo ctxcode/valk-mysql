@@ -95,6 +95,8 @@ db.exec("INSERT INTO users (name) VALUES (?)", .{ sql.Value.of("Ada") }) ! panic
     + fn close() void
     + fn fetch_all() Array[Map[Value]] !Error
     + fn fetch_row(row: Map[Value]) bool !Error
+    // Prepares a statement on the server, to run many times with other values each time.
+    + fn prepare(sql: String) Statement !Error
     + fn query(q: String, binds: ?Map[?Value] (null)) void !Error
     + fn replace_named_params(query: String) String !Error
     // Returns whether the connection runs over TLS.
@@ -106,6 +108,21 @@ db.exec("INSERT INTO users (name) VALUES (?)", .{ sql.Value.of("Ada") }) ! panic
 
 Counts the statements that have run, so that the rows of a query can tell whether
 another statement took the connection from under them.
+
+#### prepare
+
+Prepares a statement on the server, to run many times with other values each time.
+
+The server parses the SQL once, here; running the statement only sends its values, and
+its rows come back in the binary protocol. Values go in by name, `:name`; a name used
+twice takes the same value.
+
+```valk
+let find = con.prepare("SELECT * FROM users WHERE id = :id") ! panic("%{E.message}")
+defer find.close()
+find.query(.{ "id" => 1 }) ! panic("%{E.message}")
+let users = con.fetch_all() ! panic("%{E.message}")
+```
 
 #### ssl_enabled
 
@@ -154,7 +171,62 @@ How TLS is used.
 The PEM private key of `certificate_file`. Null reads it from `certificate_file`.
 
 ```js
+// A statement prepared once on the server and run as often as needed, made by `Connection.prepare`.
++ class Statement {
+    ~ closed: bool
+    // The SQL the statement was prepared from.
+    ~+ sql: String
+
+    // Releases the statement on the server. Running it afterwards throws.
+    + fn close() void
+    // Runs the statement with `values` bound to its `:name` placeholders. Rows, if any, are read with `fetch_row` or `fetch_all` of the connection.
+    + fn query(values: ?Map[?Value] (null)) void !Error
+    // Runs the statement and returns how many rows it changed. `last_inserted_id` of the connection holds the id an insert wrote.
+    + fn run(values: ?Map[?Value] (null)) uint !Error
+}
+```
+
+### Statement
+
+A statement prepared once on the server and run as often as needed, made by
+`Connection.prepare`.
+
+Its values go in by name, as with `Connection.query`, and its rows are read with the fetch
+methods of the connection. `close` releases it on the server; closing the connection
+releases them all.
+
+```valk
+let insert = con.prepare("INSERT INTO users (name, age) VALUES (:name, :age)") ! panic("%{E.message}")
+defer insert.close()
+each people as person {
+    insert.run(.{ "name" => person.name, "age" => person.age }) ! panic("%{E.message}")
+}
+```
+
+#### sql
+
+The SQL the statement was prepared from.
+
+#### close
+
+Releases the statement on the server. Running it afterwards throws.
+
+#### query
+
+Runs the statement with `values` bound to its `:name` placeholders. Rows, if any, are
+read with `fetch_row` or `fetch_all` of the connection.
+
+Every placeholder needs a value; a name without one throws.
+
+#### run
+
+Runs the statement and returns how many rows it changed. `last_inserted_id` of the
+connection holds the id an insert wrote.
+
+```js
 + class Value {
+    // Returns whether the value is NULL.
+    + fn is_null() bool
     + static fn null() Value
     + fn to_bool() bool
     + fn to_bool_or_null() ?bool
@@ -168,3 +240,7 @@ The PEM private key of `certificate_file`. Null reads it from `certificate_file`
     + fn to_string_or_null() ?String
 }
 ```
+
+#### is_null
+
+Returns whether the value is NULL.

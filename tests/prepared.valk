@@ -1,0 +1,128 @@
+use mysql
+
+test "Prepared statements" {
+    let con = connect() ! { println(E.message) assert(false) return }
+    defer con.close()
+    con.query("DROP TABLE IF EXISTS prepared_users") ! { assert(false) return }
+    con.query("CREATE TABLE prepared_users (id int NOT NULL AUTO_INCREMENT PRIMARY KEY, name varchar(50), age int, score double, small tinyint, big bigint)") ! { assert(false) return }
+
+    let insert = con.prepare("INSERT INTO prepared_users (name, age, score, small, big) VALUES (:name, :age, :score, :small, :big)") ! { println(E.message) assert(false) return }
+    assert(insert.sql.starts_with("INSERT"))
+    let i: uint = 0
+    while i++ < 20 {
+        let changed = insert.run(.{ "name" => "user " + i, "age" => i, "score" => i.to(float) / 2, "small" => -1 * i.to(int), "big" => -1000000000000 * i.to(int) }) ! { println(E.message) assert(false) return }
+        assert(changed == 1)
+        assert(con.last_inserted_id == i)
+    }
+    // NULL values, and text that needs no escaping
+    insert.run(.{ "name" => "it's \"quoted\" ?", "age" => null, "score" => null, "small" => null, "big" => null }) ! { println(E.message) assert(false) return }
+
+    // A name used twice; text in quotes stays
+    let find = con.prepare("SELECT id, name, score, small, big, ':x' AS q FROM prepared_users WHERE age >= :min AND age < :min + 3 ORDER BY id") ! { println(E.message) assert(false) return }
+    find.query(.{ "min" => 5 }) ! { println(E.message) assert(false) return }
+    let rows = con.fetch_all() ! { assert(false) return }
+    assert(rows.length == 3)
+    let first = rows.get(0) !? .{}
+    assert((first["name"] ?? mysql.Value.null()).to_string() == "user 5")
+    assert((first["score"] ?? mysql.Value.null()).to_float() == 2.5)
+    assert((first["small"] ?? mysql.Value.null()).to_int() == -5)
+    assert((first["big"] ?? mysql.Value.null()).to_int() == -5000000000000)
+    assert((first["q"] ?? mysql.Value.null()).to_string() == ":x")
+
+    // Again with other values, one row at a time
+    find.query(.{ "min" => 18 }) ! { assert(false) return }
+    let row: Map[mysql.Value] = .{}
+    let seen: uint = 0
+    while con.fetch_row(row) ! { assert(false) return } : seen++
+    assert(seen == 3)
+
+    // Stopping halfway and running another query is fine
+    find.query(.{ "min" => 1 }) ! { assert(false) return }
+    assert(con.fetch_row(row) ! { assert(false) return })
+    con.query("SELECT count(*) AS n FROM prepared_users") ! { assert(false) return }
+    let count = con.fetch_all() ! { assert(false) return }
+    assert(((count.get(0) !? .{})["n"] ?? mysql.Value.null()).to_int() == 21)
+
+    let quoted = con.prepare("SELECT age FROM prepared_users WHERE name = :name") ! { assert(false) return }
+    quoted.query(.{ "name" => "it's \"quoted\" ?" }) ! { assert(false) return }
+    let got = con.fetch_all() ! { assert(false) return }
+    assert(got.length == 1)
+    let age = (got.get(0) !? .{})["age"]
+    assert(isset(age))
+    if isset(age) : assert(age.is_null())
+
+    // A missing value throws
+    let missing = false
+    insert.run(.{ "name" => "x" }) ! {
+        missing = true
+    }
+    assert(missing)
+
+    // Server errors leave the statement usable
+    let unique = con.prepare("INSERT INTO prepared_users (id, name) VALUES (:id, :name)") ! { assert(false) return }
+    let clash = false
+    unique.run(.{ "id" => 1, "name" => "x" }) ! {
+        clash = E.error_code == 1062
+    }
+    assert(clash)
+    assert((unique.run(.{ "id" => 1000, "name" => "y" }) ! { println(E.message) assert(false) return }) == 1)
+
+    // Closed statements throw
+    insert.close()
+    let closed = false
+    insert.run(.{ "name" => "x", "age" => 1, "score" => 1, "small" => 1, "big" => 1 }) ! {
+        closed = true
+    }
+    assert(closed)
+    insert.close()
+    find.close()
+    quoted.close()
+    unique.close()
+
+    // Still in sync after the closes
+    con.query("SELECT 1 AS one") ! { assert(false) return }
+    let one = con.fetch_all() ! { assert(false) return }
+    assert(((one.get(0) !? .{})["one"] ?? mysql.Value.null()).to_int() == 1)
+    con.query("DROP TABLE prepared_users") ! { assert(false) return }
+}
+
+test "Prepared statement errors" {
+    let con = connect() ! { println(E.message) assert(false) return }
+    defer con.close()
+
+    let syntax = false
+    con.prepare("SELEC 1") ! {
+        syntax = E.error_code == 1064
+    }
+    assert(syntax)
+
+    // Values only go in by name
+    let positional = false
+    con.prepare("SELECT ? + 1") ! {
+        positional = true
+    }
+    assert(positional)
+
+    // Signed and unsigned integer columns
+    con.query("DROP TABLE IF EXISTS prepared_ints") ! { assert(false) return }
+    con.query("CREATE TABLE prepared_ints (a tinyint, b tinyint unsigned, c smallint, d smallint unsigned, e mediumint, f int, g int unsigned)") ! { assert(false) return }
+    let ints = con.prepare("INSERT INTO prepared_ints VALUES (:a, :b, :c, :d, :e, :f, :g)") ! { assert(false) return }
+    ints.run(.{ "a" => -100, "b" => 200, "c" => -30000, "d" => 60000, "e" => -8000000, "f" => -2000000000, "g" => 4000000000 }) ! { println(E.message) assert(false) return }
+    let read = con.prepare("SELECT * FROM prepared_ints WHERE a = :a") ! { assert(false) return }
+    read.query(.{ "a" => -100 }) ! { assert(false) return }
+    let int_rows = con.fetch_all() ! { assert(false) return }
+    let r = int_rows.get(0) !? .{}
+    assert((r["a"] ?? mysql.Value.null()).to_int() == -100)
+    assert((r["b"] ?? mysql.Value.null()).to_int() == 200)
+    assert((r["c"] ?? mysql.Value.null()).to_int() == -30000)
+    assert((r["d"] ?? mysql.Value.null()).to_int() == 60000)
+    assert((r["e"] ?? mysql.Value.null()).to_int() == -8000000)
+    assert((r["f"] ?? mysql.Value.null()).to_int() == -2000000000)
+    assert((r["g"] ?? mysql.Value.null()).to_int() == 4000000000)
+    con.query("DROP TABLE prepared_ints") ! { assert(false) return }
+
+    let one = con.prepare("SELECT 1 AS v") ! { println(E.message) assert(false) return }
+    one.query() ! { assert(false) return }
+    let rows = con.fetch_all() ! { assert(false) return }
+    assert(((rows.get(0) !? .{})["v"] ?? mysql.Value.null()).to_int() == 1)
+}

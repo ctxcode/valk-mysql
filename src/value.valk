@@ -16,6 +16,11 @@ use valk.json
     string_value: String ("")
     array_items: ?Array[Value]
 
+    /// Returns whether the value is NULL.
+    + fn is_null() bool {
+        return this.type == TYPE.null
+    }
+
     + fn to_bool() bool $auto {
         let type = this.type
         if type == TYPE.int : return this.int_value == 1
