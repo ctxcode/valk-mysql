@@ -1,6 +1,6 @@
 {
     "name": "mysql",
-    "use": "0.7.10",
+    "use": "0.7.11",
     "require": {
         "valk": {
             "min": "0.7.5"
