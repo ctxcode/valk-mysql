@@ -8,7 +8,7 @@ extend Connection {
         let proto = r.read_byte() // Always 10
         if proto != 10 : throw .unsupported { message: "Unsupported protocol version" }
         //
-        let version : String = r.read_cstring()
+        let _ = r.read_cstring()
         //
         this.con_id = r.read_u32_le()
         // auth-plugin-data-part-1

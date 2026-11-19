@@ -1,6 +1,4 @@
 
-use valk.core
-
 extend Connection {
     binds: Array[Value] (.{})
     named_binds: Map[Value] (.{})
@@ -21,7 +19,6 @@ extend Connection {
         let str_mode = false
         let ignore_next = false
         let binds = this.binds
-        let final_binds = this.final_binds
         let bindi : uint = 0
         this.disable_inline_binds = query.contains(";")
 
@@ -86,7 +83,6 @@ extend Connection {
     fn insert_bind_value(q: ByteBuffer, v: Value) {
 
         if isset(v) && !this.disable_inline_binds {
-            let inline = false
             if v.type == TYPE.int {
                 q.write_int_ascii(v.int_value)
                 return

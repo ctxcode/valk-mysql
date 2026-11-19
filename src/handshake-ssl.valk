@@ -5,7 +5,6 @@ extend Connection {
 
     fn enable_ssl() !Error {
         // Response
-        let scaps = this.scaps
         let ccaps = this.get_caps()
         ccaps |=  CAP.CLIENT_SSL
         //

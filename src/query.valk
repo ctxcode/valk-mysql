@@ -118,7 +118,7 @@ extend Connection {
         let i : uint = 0
         let count = this.param_count
         while i++ < count {
-            let column_name, type = this.read_column() !>
+            let _, _ = this.read_column() !>
         }
     }
 
@@ -226,7 +226,7 @@ extend Connection {
         r.skip(1)
         // Warnings
         if r.source.length > 12 {
-            let warn_count = r.read_u16_le()
+            let _ = r.read_u16_le()
         }
 
         // Meta data packets
@@ -304,7 +304,6 @@ extend Connection {
     }
 
     fn flush_result() !Error {
-        let r = this.reader
         if !this.fetching : return
         let row = Map[Value]{}
         while this.fetching {
