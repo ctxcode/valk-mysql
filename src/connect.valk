@@ -2,17 +2,41 @@
 use valk.net
 use valk.time
 
-/// Connects and logs in. TLS is used when the server offers it, without checking the
-/// certificate; `connect_with` takes other `SslOptions`.
-+ fn connect(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslMode (SslMode.prefer)) Connection !Error {
+/// Connects and logs in.
+///
+/// `host` may be a host name, an IP address, or a Unix domain socket path starting with `/`
+/// (for example `/var/run/mysqld/mysqld.sock`). TLS is used over TCP when the server offers it,
+/// without checking the certificate; `prefer` skips TLS over Unix domain sockets. `connect_with`
+/// takes other `SslOptions`.
++ fn connect(host: String, user: String, password: String, db: ?String, port: u32 (3306), ssl: SslMode (SslMode.prefer)) Connection !Error {
     return connect_with(host, user, password, db, port, SslOptions { mode: ssl }) !>
+}
+
+/// Connects and logs in over a Unix domain socket.
++ fn connect_unix(socket_path: String, user: String, password: String, db: ?String (null)) Connection !Error {
+    let sock = dial_socket(socket_path, 0, true) !>
+    return open_connection(sock, socket_path, user, password, db, SslOptions { mode: SslMode.disable }, true) !>
 }
 
 /// Connects and logs in with the TLS settings in `ssl`, such as a CA file to check the server
 /// certificate against, or a client certificate.
-+ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslOptions) Connection !Error {
-    let sock = net.tcp_client(host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
++ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32 (3306), ssl: SslOptions) Connection !Error {
+    let unix = host.starts_with("/")
+    if unix && (ssl.mode == SslMode.require || ssl.mode == SslMode.verify_full) {
+        throw .connect { message: "TLS is not supported over a Unix domain socket" }
+    }
+    let sock = dial_socket(host, port, unix) !>
+    return open_connection(sock, host, user, password, db, ssl, unix) !>
+}
 
+fn dial_socket(host: String, port: u32, unix: bool) net.TcpConnection !Error {
+    if unix {
+        return net.unix_client(host) ! throw .connect { message: "Failed to connect to Unix socket '%{host}'" }
+    }
+    return net.tcp_client(host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
+}
+
+fn open_connection(sock: net.TcpConnection, host: String, user: String, password: String, db: ?String, ssl: SslOptions, is_unix: bool) Connection !Error {
     let col_types = Array[uint]{}
     let col_names = Array[String]{}
     let con = Connection {
@@ -22,6 +46,7 @@ use valk.time
         password: password
         db: db
         ssl: ssl
+        is_unix: is_unix
         reader: ByteReader.new("")
         //
         default_column_types: col_types
@@ -29,7 +54,10 @@ use valk.time
         column_types: col_types
         column_names: col_names
     }
-    con.init() !>
+    con.init() ! {
+        con.close()
+        throw E
+    }
     con.password = "" // clear from memory
 
     return con
@@ -43,6 +71,7 @@ use valk.time
     password: String
     db: ?String
     ssl: SslOptions
+    is_unix: bool (false)
     // Data in
     data_in: ByteBuffer (.new())
     packet_end: uint (0) // End of the packet `reader` currently views inside data_in (compacted on next recv)

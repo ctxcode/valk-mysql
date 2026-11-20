@@ -1,0 +1,137 @@
+use mysql
+use valk.net
+use valk.fs
+use valk.io
+
+#if OS != "win"
+fn mysql_read_exact(peer: net.TcpConnection, buf: ByteBuffer, count: uint) bool {
+    let scratch = [u8]{ 0 x 512 }
+    while buf.length < count {
+        let n = peer.read(scratch) ! return false
+        if n == 0 : return false
+        buf.write(scratch.view(0, n))
+    }
+    return true
+}
+
+fn mysql_send_packet(peer: net.TcpConnection, seq: u8, payload: ByteBuffer) bool {
+    let frame = ByteBuffer.new()
+    frame.write_little_endian(payload.length, 3)
+    frame.write_byte(seq)
+    frame.write(payload)
+    io.write_all(peer, frame) ! return false
+    return true
+}
+
+// Accepts one connection, sends a MySQL 10 greeting (advertising CLIENT_SSL to confirm Unix
+// sockets skip TLS under SslMode.prefer), reads the HandshakeResponse41, replies OK, and
+// returns "user:db:ssl_flag".
+fn mysql_serve_one(server: atomic net.UnixServer) String {
+    let peer = server.accept(2000) ! return ""
+    defer peer.close() _
+
+    // Greeting packet (seq 0)
+    let g = ByteBuffer.new()
+    g.write_byte(10) // protocol version
+    g.write("8.0.36-unix")
+    g.write_byte(0)
+    g.write_u32_le(42) // connection id
+    g.write("12345678") // auth-plugin-data-part-1 (8 bytes)
+    g.write_byte(0) // filler
+    // caps low: CLIENT_MYSQL (1) | CLIENT_PROTOCOL_41 (512) | CLIENT_SSL (2048) | CLIENT_SECURE_CONNECTION (32768)
+    g.write_u16_le(0x8A01)
+    g.write_byte(45) // utf8mb4
+    g.write_u16_le(2) // status flags
+    // caps high: CLIENT_PLUGIN_AUTH (1 << 19 -> bit 3 of high word = 0x0008)
+    g.write_u16_le(0x0008)
+    g.write_byte(21) // auth_plugin_data_len
+    g.fill(0, 10) // reserved (6) + filler (4)
+    g.write("abcdefghijkl") // auth-plugin-data-part-2 (12 bytes)
+    g.write_byte(0) // trailing nul
+    g.write("mysql_native_password")
+    g.write_byte(0)
+    if !mysql_send_packet(peer, 0, g) : return ""
+
+    // Read HandshakeResponse41 (seq 1)
+    let buf = ByteBuffer.new()
+    if !mysql_read_exact(peer, buf, 4) : return ""
+    let r = ByteReader.new(buf)
+    let plen: uint = r.read_little_endian(3)
+    let seq = r.read_byte()
+    if seq != 1 : return ""
+    if !mysql_read_exact(peer, buf, plen + 4) : return ""
+
+    r.reset()
+    r.source = buf.view(4, plen)
+    let ccaps = r.read_u32_le()
+    let used_ssl = (ccaps & 2048) > 0
+    r.skip(4) // max_packet_size
+    r.skip(1) // charset
+    r.skip(23) // filler
+    let user = r.read_cstring()
+    let auth_len: uint = r.read_byte()
+    r.skip(auth_len)
+    let db = ""
+    if (ccaps & 8) > 0 : db = r.read_cstring()
+
+    // OK packet (seq 2)
+    let ok = ByteBuffer.new()
+    ok.write_byte(0x00)
+    ok.write_byte(0x00)
+    ok.write_byte(0x00)
+    ok.write_u16_le(2)
+    ok.write_u16_le(0)
+    mysql_send_packet(peer, 2, ok)
+
+    return user + ":" + db + ":" + (used_ssl ? "ssl" : "plain")
+}
+
+test "Unix domain socket" {
+    let dir = fs.create_temp_dir("valk-mysql-unix-") ! { assert(false) return }
+    defer fs.delete_all(dir) _
+
+    let sock_path = fs.add(dir, "mysqld.sock")
+    let srv = net.unix_server(sock_path, true) ! { assert(false) return }
+    defer srv.close() _
+
+    // 1. connect_unix()
+    let task = co fn() String {
+        return mysql_serve_one(srv)
+    }()
+
+    let con = mysql.connect_unix(sock_path, "alice", "secret", "appdb") ! { println(E.message) assert(false) return }
+    assert(!con.ssl_enabled())
+    con.close()
+    assert((await task) == "alice:appdb:plain")
+
+    // 2. connect() with Unix socket path and default SslMode.prefer (skips TLS even though server advertises CLIENT_SSL)
+    let task2 = co fn() String {
+        return mysql_serve_one(srv)
+    }()
+
+    let con2 = mysql.connect(sock_path, "bob", "secret", "mydb") ! { println(E.message) assert(false) return }
+    assert(!con2.ssl_enabled())
+    con2.close()
+    assert((await task2) == "bob:mydb:plain")
+
+    // 3. Forcing TLS over a Unix socket fails cleanly with .connect
+    let req_tls = false
+    mysql.connect(sock_path, "alice", "secret", "appdb", 3306, mysql.SslMode.require) ! {
+        req_tls = error_is(E.code, connect)
+    }
+    assert(req_tls)
+
+    let verify_tls = false
+    mysql.connect(sock_path, "alice", "secret", "appdb", 3306, mysql.SslMode.verify_full) ! {
+        verify_tls = error_is(E.code, connect)
+    }
+    assert(verify_tls)
+
+    // 4. Missing socket fails cleanly with .connect
+    let missing = false
+    mysql.connect_unix(fs.add(dir, "missing.sock"), "alice", "secret", "appdb") ! {
+        missing = error_is(E.code, connect)
+    }
+    assert(missing)
+}
+#end

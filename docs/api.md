@@ -25,10 +25,12 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
 ## Functions for 'main'
 
 ```js
-// Connects and logs in. TLS is used when the server offers it, without checking the certificate; `connect_with` takes other `SslOptions`.
-+ fn connect(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslMode (SslMode.prefer)) Connection !Error
+// Connects and logs in.
++ fn connect(host: String, user: String, password: String, db: ?String, port: u32 (3306), ssl: SslMode (SslMode.prefer)) Connection !Error
+// Connects and logs in over a Unix domain socket.
++ fn connect_unix(socket_path: String, user: String, password: String, db: ?String (null)) Connection !Error
 // Connects and logs in with the TLS settings in `ssl`, such as a CA file to check the server certificate against, or a client certificate.
-+ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32, ssl: SslOptions) Connection !Error
++ fn connect_with(host: String, user: String, password: String, db: ?String, port: u32 (3306), ssl: SslOptions) Connection !Error
 + fn convert(ndata: $T) Value
 // Returns the connection as a `sql.Db`, the database type of the `valk-sql` package.
 + fn database(con: Connection) Db
