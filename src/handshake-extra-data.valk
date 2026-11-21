@@ -44,7 +44,7 @@ extend Connection {
                     // Receive key
                     this.recv() !>
                     this.check_error() !>
-                    if r.read_byte() != 0x01 : throw .error { message: "Invalid RSA key response from the mysql server" }
+                    if r.read_byte() != 0x01 : throw .error("Invalid RSA key response from the mysql server", 0, "")
                     key = r.read_remaining_string()
                     this.rsa_public_key = key
                 }
@@ -56,7 +56,7 @@ extend Connection {
                 return true
             }
         }
-        this.unsupported()
+        this.unsupported() !>
     }
 
     // Password XOR'd with the scramble, zero-terminated, then RSA/OAEP encrypted with the server key.
@@ -82,13 +82,13 @@ extend Connection {
 fn rsa_public_encrypt(key: String, in: ByteBuffer, out: ByteBuffer) !Error {
     @unsafe
     let bio = BIO_new_mem_buf(key.data, key.length.to(i32))
-    if !isset(bio) : throw .error { message: "Failed to allocate RSA key buffer" }
+    if !isset(bio) : throw .error("Failed to allocate RSA key buffer", 0, "")
     let rsa = PEM_read_bio_RSA_PUBKEY(bio, null, null, null)
     BIO_free(bio)
-    if !isset(rsa) : throw .error { message: "Failed to parse MySQL RSA public key" }
+    if !isset(rsa) : throw .error("Failed to parse MySQL RSA public key", 0, "")
     let out_len = RSA_size(rsa).to(uint)
     out.reserve(out_len)
     let res = RSA_public_encrypt(in.length.to(i32), in.data, out.data.@offset(out.length), rsa, RSA_PKCS1_OAEP_PADDING)
-    if res <= 0 : throw .error { message: "Failed to encrypt password using the mysql RSA public key" }
+    if res <= 0 : throw .error("Failed to encrypt password using the mysql RSA public key", 0, "")
     out.skip(res.to(uint))
 }

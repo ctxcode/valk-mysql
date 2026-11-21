@@ -23,7 +23,7 @@ use valk.time
 + fn connect_with(host: String, user: String, password: String, db: ?String, port: u32 (3306), ssl: SslOptions) Connection !Error {
     let unix = host.starts_with("/")
     if unix && (ssl.mode == SslMode.require || ssl.mode == SslMode.verify_full) {
-        throw .connect { message: "TLS is not supported over a Unix domain socket" }
+        throw .connect("TLS is not supported over a Unix domain socket")
     }
     let sock = dial_socket(host, port, unix) !>
     return open_connection(sock, host, user, password, db, ssl, unix) !>
@@ -31,9 +31,9 @@ use valk.time
 
 fn dial_socket(host: String, port: u32, unix: bool) net.TcpConnection !Error {
     if unix {
-        return net.unix_client(host) ! throw .connect { message: "Failed to connect to Unix socket '%{host}'" }
+        return net.unix_client(host) ! throw .connect("Failed to connect to Unix socket '%{host}'")
     }
-    return net.tcp_client(host, port.to(u16)) ! throw .connect { message: "Failed to connect to socket" }
+    return net.tcp_client(host, port.to(u16)) ! throw .connect("Failed to connect to socket")
 }
 
 fn open_connection(sock: net.TcpConnection, host: String, user: String, password: String, db: ?String, ssl: SslOptions, is_unix: bool) Connection !Error {
@@ -105,7 +105,7 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
         this.handshake_response() !>
         let count = 0
         while true {
-            if count++ > 10 : throw .error { message: "Infinite loop bug" }
+            if count++ > 10 : throw .error("Infinite loop bug", 0, "")
             let r = this.reader
             if r.read_byte() == 0 : break
             r.rewind(1)
@@ -116,19 +116,19 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
             // Check for more auth data
             if this.handshake_extra_data() !> : continue
             // Unknown header byte
-            this.unsupported()
+            this.unsupported() !>
         }
     }
 
     fn unsupported() !Error $throw {
-        throw .handshake { message: "This package has not implemented all protocols. Unexpected bytes received." }
+        throw .handshake("This package has not implemented all protocols. Unexpected bytes received.")
     }
 
     fn check_auth_method() !Error {
         // println("method: " + this.auth_plugin)
         if this.auth_plugin != "mysql_native_password"
         && this.auth_plugin != "caching_sha2_password"
-        : throw .unsupported { message: "Unsupported authentication method: %{ this.auth_plugin }" }
+        : throw .unsupported("Unsupported authentication method: %{ this.auth_plugin }")
     }
 
     fn check_error() !Error {
@@ -152,7 +152,7 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
             sqlstate = r.read_string(5)
         }
 
-        throw .error { message: r.read_remaining_string(), error_code: code, sqlstate: sqlstate }
+        throw .error(r.read_remaining_string(), code, sqlstate)
     }
 
     fn recv() !Error {
@@ -169,7 +169,7 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
         while recv_bytes < 4 {
             recv_bytes += this.recv_into_buffer() !>
         }
-        if recv_bytes < 4 : throw .error { message: "Invalid MySQL server response (missing packet bytes)" }
+        if recv_bytes < 4 : throw .error("Invalid MySQL server response (missing packet bytes)", 0, "")
         //
         // Packet header: 3 byte little-endian payload length + 1 byte sequence id
         let r = this.reader
@@ -197,8 +197,8 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
 
     fn recv_into_buffer() uint !Error {
         let data = this.recv_scratch
-        let count = this.con.read(data) ! throw .error { message: "Failed to read bytes from socket" }
-        if count == 0 : throw .error { message: "MySQL server closed the connection" }
+        let count = this.con.read(data) ! throw .error("Failed to read bytes from socket", 0, "")
+        if count == 0 : throw .error("MySQL server closed the connection", 0, "")
         this.data_in.write(data.view(0, count))
         return count
     }
@@ -220,7 +220,7 @@ fn open_connection(sock: net.TcpConnection, host: String, user: String, password
             if this.debug_bytes : print_bytes(pb)
         }
         //
-        this.con.write(pb) ! throw .error { message: "Failed to send bytes to server" }
+        this.con.write(pb) ! throw .error("Failed to send bytes to server", 0, "")
         //
         if this.debug {
             println("Time needed to send: " + ((time.mono_us() - start) / 1000) + "ms")

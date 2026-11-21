@@ -50,7 +50,7 @@ extend Connection {
                     }
                     let len = end - start + 1
                     let name = query.range(start, len)
-                    let bindv = this.named_binds.get(name) ! throw .error { message: "Cannot find named binding: '" + name + "'" }
+                    let bindv = this.named_binds.get(name) ! throw .error("Cannot find named binding: '" + name + "'", 0, "")
                     if isset(bindv) {
                         if bindv.type == TYPE.array {
                             let items = bindv.array_items
@@ -68,7 +68,7 @@ extend Connection {
                     continue
                 }
             } else if ch == '?' {
-                let val = binds.get(bindi++) ! throw .error { message: "You have more '?' tokens than the amount of binded values" }
+                let val = binds.get(bindi++) ! throw .error("You have more '?' tokens than the amount of binded values", 0, "")
                 this.insert_bind_value(r, val)
                 continue
             } else if ch == '"' {

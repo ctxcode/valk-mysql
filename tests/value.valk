@@ -26,3 +26,20 @@ test "Value conversions" {
     let value: json.Value = json.new_int(7)
     assert(value.to_mysql_value().to_string() == "7")
 }
+
+test "Error fields and string conversion" {
+    let err: mysql.Error = .error("Duplicate entry", 1062, "23000")
+    assert(err is .error)
+    assert(err.message == "Duplicate entry")
+    assert(err.error_code == 1062)
+    assert(err.sqlstate == "23000")
+    assert(err.to_string() == "Duplicate entry")
+    assert("%{err}" == "Duplicate entry")
+
+    let conn: mysql.Error = .connect("connection refused")
+    assert(conn is .connect)
+    assert(conn.message == "connection refused")
+    assert(conn.error_code == 0)
+    assert(conn.sqlstate == "")
+    assert("%{conn}" == "connection refused")
+}

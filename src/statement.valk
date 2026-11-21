@@ -68,7 +68,7 @@ extend Connection {
     /// let users = con.fetch_all() ! panic("%{E.message}")
     /// ```
     + fn prepare(sql: String) Statement !Error {
-        if this.closed : throw .error { message: "The connection is closed" }
+        if this.closed : throw .error("The connection is closed", 0, "")
         if this.in_progress : this.stop_query()
         this.query_serial++
         let names = Array[String]{}
@@ -84,25 +84,25 @@ extend Connection {
         }
         if statement.param_count != names.length {
             statement.close()
-            throw .error { message: "A prepared statement takes its values by name: use :name instead of ?" }
+            throw .error("A prepared statement takes its values by name: use :name instead of ?", 0, "")
         }
         return statement
     }
 
     // Binds `values` to a prepared statement and runs it
     fn query_prepared(statement: Statement, values: ?Map[?Value]) !Error {
-        if statement.closed || this.closed : throw .error { message: "The statement is closed" }
+        if statement.closed || this.closed : throw .error("The statement is closed", 0, "")
         if this.in_progress : this.stop_query()
         let binds = this.final_binds
         binds.clear()
         each statement.names as name {
-            let given = values ?! throw .error { message: "No value for the placeholder ':" + name + "'" }
-            let value = given.get(name) ! throw .error { message: "No value for the placeholder ':" + name + "'" }
+            let given = values ?! throw .error("No value for the placeholder ':" + name + "'", 0, "")
+            let value = given.get(name) ! throw .error("No value for the placeholder ':" + name + "'", 0, "")
             if !isset(value) {
                 binds.append(Value.null())
                 continue
             }
-            if value.type == TYPE.array : throw .error { message: "A list cannot be bound to the placeholder ':" + name + "' of a prepared statement" }
+            if value.type == TYPE.array : throw .error("A list cannot be bound to the placeholder ':" + name + "' of a prepared statement", 0, "")
             binds.append(value)
         }
         this.in_progress = true

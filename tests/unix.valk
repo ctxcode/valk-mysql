@@ -117,20 +117,20 @@ test "Unix domain socket" {
     // 3. Forcing TLS over a Unix socket fails cleanly with .connect
     let req_tls = false
     mysql.connect(sock_path, "alice", "secret", "appdb", 3306, mysql.SslMode.require) ! {
-        req_tls = error_is(E.code, connect)
+        req_tls = E is .connect
     }
     assert(req_tls)
 
     let verify_tls = false
     mysql.connect(sock_path, "alice", "secret", "appdb", 3306, mysql.SslMode.verify_full) ! {
-        verify_tls = error_is(E.code, connect)
+        verify_tls = E is .connect
     }
     assert(verify_tls)
 
     // 4. Missing socket fails cleanly with .connect
     let missing = false
     mysql.connect_unix(fs.add(dir, "missing.sock"), "alice", "secret", "appdb") ! {
-        missing = error_is(E.code, connect)
+        missing = E is .connect
     }
     assert(missing)
 }

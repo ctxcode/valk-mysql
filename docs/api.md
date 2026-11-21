@@ -7,13 +7,6 @@ Namespaces: [main](#main)
 
 # main
 
-## Errors for 'main'
-
-```js
-// Thrown by every operation of this package.
-error Error (connect, handshake, unsupported, error) payload { message: String, error_code: uint (0), sqlstate: String ("") }
-```
-
 ## Enums for 'main'
 
 ```js
@@ -61,6 +54,21 @@ error Error (connect, handshake, unsupported, error) payload { message: String, 
     + fn replace_named_params(query: String) String !Error
     // Returns whether the connection runs over TLS.
     + fn ssl_enabled() bool
+}
+```
+
+```js
+// Thrown by every operation of this package.
++ union Error {
+    connect(String)
+    handshake(String)
+    unsupported(String)
+    error(String, uint, String)
+
+    + get error_code: uint
+    + get message: String
+    + get sqlstate: String
+    + fn to_string() String
 }
 ```
 

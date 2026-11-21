@@ -7,23 +7,6 @@ Namespaces: [main](#main)
 
 # main
 
-## Errors for 'main'
-
-```js
-// Thrown by every operation of this package.
-error Error (connect, handshake, unsupported, error) payload { message: String, error_code: uint (0), sqlstate: String ("") }
-```
-
-### Error
-
-Thrown by every operation of this package.
-
-- `connect`: the TCP connection failed.
-- `handshake`: logging in failed.
-- `unsupported`: the server asked for something this package does not implement.
-- `error`: the server reported an error. `error_code` holds its number, such as 1062 for a
-  duplicate key, and `sqlstate` the five character state, such as `23000`.
-
 ## Enums for 'main'
 
 ```js
@@ -137,6 +120,33 @@ let users = con.fetch_all() ! panic("%{E.message}")
 #### ssl_enabled
 
 Returns whether the connection runs over TLS.
+
+```js
+// Thrown by every operation of this package.
++ union Error {
+    connect(String)
+    handshake(String)
+    unsupported(String)
+    error(String, uint, String)
+
+    + get error_code: uint
+    + get message: String
+    + get sqlstate: String
+    + fn to_string() String
+}
+```
+
+### Error
+
+Thrown by every operation of this package.
+
+- `connect(message)`: the TCP or Unix socket connection, or TLS setup, failed.
+- `handshake(message)`: logging in failed.
+- `unsupported(message)`: the server asked for something this package does not implement.
+- `error(message, error_code, sqlstate)`: the server reported an error, or a query or
+  protocol error occurred. `error_code` holds the server's number (such as 1062 for a
+  duplicate key, or 0 when there is none), and `sqlstate` the five-character state (such as
+  `23000`, or `""`).
 
 ```js
 // TLS settings for `connect_with`.

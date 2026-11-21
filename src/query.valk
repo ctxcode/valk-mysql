@@ -60,7 +60,7 @@ extend Connection {
         }
 
         this.fetching = true
-        this.check_result_set()
+        this.check_result_set() !>
     }
 
     + fn clear_binds() {
@@ -125,8 +125,8 @@ extend Connection {
     // The type of a column, with UNSIGNED_TYPE added for an unsigned integer column
     fn read_column() (String, uint) !Error {
         let r = this.reader
-        this.recv() ! throw .error
-        this.check_error() ! throw .error
+        this.recv() !>
+        this.check_error() !>
         // catalog (def)
         let strlen = r.read_int_enc()
         r.skip(strlen)
@@ -258,7 +258,7 @@ extend Connection {
         let binds = this.final_binds
         let i : uint = 0
         while i < param_count {
-            let bind = binds.get(i++) ! throw .error { message: "Missing bind values" }
+            let bind = binds.get(i++) ! throw .error("Missing bind values", 0, "")
             if bind.type != TYPE.null : continue
             let byte_pos = null_start + (i - 1) / 8
             let bit_pos = ((i - 1) % 8).to(u8)
@@ -279,7 +279,7 @@ extend Connection {
             } else if bind.type == TYPE.float {
                 s.write_u16_le(FIELD_TYPE.DOUBLE.to(u16))
             } else {
-                throw .error { message: "Bug: Unhandled bind value type" }
+                throw .error("Bug: Unhandled bind value type", 0, "")
             }
         }
         // Write values
@@ -295,7 +295,7 @@ extend Connection {
             } else if bind.type == TYPE.float {
                 s.write_f64_le(bind.float_value)
             } else {
-                throw .error { message: "Bug: Unhandled bind value type" }
+                throw .error("Bug: Unhandled bind value type", 0, "")
             }
         }
 
@@ -307,7 +307,7 @@ extend Connection {
         if !this.fetching : return
         let row = Map[Value]{}
         while this.fetching {
-            this.fetch_row(row)
+            this.fetch_row(row) !>
         }
     }
 
@@ -320,7 +320,7 @@ extend Connection {
             this.column_count = r.read_int_enc()
 
             if this.column_count > 0 {
-                this.read_column_data()
+                this.read_column_data() !>
                 return
             }
 
@@ -404,8 +404,8 @@ extend Connection {
         while i < column_count {
             let byte_pos = (i + 2) / 8
             let bit_pos = ((i + 2) % 8).to(u8)
-            let full_type = column_types.get(i) ! throw .error { message: "Bug: Missing column type" }
-            let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+            let full_type = column_types.get(i) ! throw .error("Bug: Missing column type", 0, "")
+            let name = column_names.get(i) ! throw .error("Bug: Missing column name", 0, "")
             let unsigned = (full_type & UNSIGNED_TYPE) > 0
             let type = full_type & 0xFF
             i++
@@ -445,7 +445,7 @@ extend Connection {
                 row.set(name, str)
             } else if type == FIELD_TYPE.DATE.to(uint) || type == FIELD_TYPE.DATETIME.to(uint) || type == FIELD_TYPE.TIMESTAMP.to(uint) {
                 let len = r.read_byte()
-                if len != 0 && len != 4 && len != 7 && len != 11 : throw .error { message: "Mysql server responded with an invalid datetime value length: %len" }
+                if len != 0 && len != 4 && len != 7 && len != 11 : throw .error("Mysql server responded with an invalid datetime value length: %len", 0, "")
                 let year : uint = 0
                 let month : uint = 0
                 let day : uint = 0
@@ -481,7 +481,7 @@ extend Connection {
 
             } else if type == FIELD_TYPE.TIME.to(uint) {
                 let len = r.read_byte()
-                if len != 0 && len != 8 && len != 12 : throw .error { message: "Mysql server responded with an invalid datetime value length: %len" }
+                if len != 0 && len != 8 && len != 12 : throw .error("Mysql server responded with an invalid datetime value length: %len", 0, "")
                 let negative = r.read_byte() == 1
                 let days : uint = 0
                 let hour : uint = 0
@@ -508,7 +508,7 @@ extend Connection {
                     row.set(name, time + "." + usec.to(String).pad_left('0', 6))
                 }
             } else {
-                throw .error { message: "Bug: Unhandled mysql type: " + type }
+                throw .error("Bug: Unhandled mysql type: " + type, 0, "")
             }
         }
         return true
@@ -523,8 +523,8 @@ extend Connection {
         let i : uint = 0
         while i < column_count {
             //
-            let type = (column_types.get(i) ! throw .error { message: "Bug: Missing column type" }) & 0xFF
-            let name = column_names.get(i) ! throw .error { message: "Bug: Missing column name" }
+            let type = (column_types.get(i) ! throw .error("Bug: Missing column type", 0, "")) & 0xFF
+            let name = column_names.get(i) ! throw .error("Bug: Missing column name", 0, "")
             i++
             //
             let len = r.read_int_enc()

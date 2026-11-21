@@ -49,11 +49,11 @@ test "Through the sql package" {
 
     // Errors arrive as sql errors, with the server's number kept
     db.exec("INSERT INTO sql_users (id, name) VALUES (1, 'clash')") ! {
-        assert(error_is(E.code, constraint))
+        assert(E is .constraint)
         assert(E.driver_code == "1062")
     }
     db.exec("SELECT * FROM nothing_here") ! {
-        assert(error_is(E.code, syntax))
+        assert(E is .syntax)
         assert(E.driver_code == "1146")
     }
     assert((db.value("SELECT count(*) FROM sql_users") ! { assert(false) return }).to_int() == 2)
@@ -113,7 +113,7 @@ test "The builder and migrations against MySQL" {
         tx.exec("INSERT INTO sql_posts (title, views, published) VALUES (:title, :views, :published)", .{ "title" => "fifth", "views" => 1, "published" => false }) !>
         tx.exec("INSERT INTO nothing_here VALUES (1)") !>
     }) ! {
-        assert(error_is(E.code, syntax))
+        assert(E is .syntax)
         assert((db.value("SELECT count(*) FROM sql_posts") ! { assert(false) return }).to_int() == 3)
         db.exec("DROP TABLE sql_posts") ! { assert(false) return }
         db.exec("DROP TABLE schema_migrations") ! { assert(false) return }
@@ -206,7 +206,7 @@ test "Chunking and rows taken over, on MySQL" {
     rows.next(row) ! { assert(false) return }
     db.exec("UPDATE sql_chunks SET checked = 0 WHERE id = 1") ! { assert(false) return }
     rows.next(row) ! {
-        assert(error_is(E.code, error))
+        assert(E is .error)
         assert(E.message.contains("another statement ran"))
         rows.close()
         db.exec("DROP TABLE sql_chunks") ! { assert(false) return }
