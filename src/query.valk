@@ -467,15 +467,15 @@ extend Connection {
                 if len == 11 {
                     usec = r.read_u32_le()
                 }
-                let date = "%{year.to(String).pad_left('0', 2)}-%{month.to(String).pad_left('0', 2)}-%{day.to(String).pad_left('0', 2)}"
+                let date = "%{year.to(String).pad_left(2, '0')}-%{month.to(String).pad_left(2, '0')}-%{day.to(String).pad_left(2, '0')}"
                 if type == FIELD_TYPE.DATE.to(uint) {
                     row.set(name, date)
                 } else {
-                    let time = "%{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
+                    let time = "%{hour.to(String).pad_left(2, '0')}:%{min.to(String).pad_left(2, '0')}:%{sec.to(String).pad_left(2, '0')}"
                     if len == 7 {
                         row.set(name, date + " " + time)
                     } else {
-                        row.set(name, date + " " + time + "." + usec.to(String).pad_left('0', 6))
+                        row.set(name, date + " " + time + "." + usec.to(String).pad_left(6, '0'))
                     }
                 }
 
@@ -501,11 +501,11 @@ extend Connection {
                     usec = r.read_u32_le()
                 }
                 let sign = negative ? "-" : ""
-                let time = "%{sign}%{days}d %{hour.to(String).pad_left('0', 2)}:%{min.to(String).pad_left('0', 2)}:%{sec.to(String).pad_left('0', 2)}"
+                let time = "%{sign}%{days}d %{hour.to(String).pad_left(2, '0')}:%{min.to(String).pad_left(2, '0')}:%{sec.to(String).pad_left(2, '0')}"
                 if len < 12 {
                     row.set(name, time)
                 } else {
-                    row.set(name, time + "." + usec.to(String).pad_left('0', 6))
+                    row.set(name, time + "." + usec.to(String).pad_left(6, '0'))
                 }
             } else {
                 throw .error("Bug: Unhandled mysql type: " + type, 0, "")

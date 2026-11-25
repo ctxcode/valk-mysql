@@ -54,5 +54,5 @@ fn main() {
 
 fn report(label: String, ops: uint, start: uint) {
     let us = time.mono_us() - start
-    println(label.pad_right(' ', 26) + (ops * 1000000 / us) + " ops/s")
+    println(label.pad_right(26) + (ops * 1000000 / us) + " ops/s")
 }
